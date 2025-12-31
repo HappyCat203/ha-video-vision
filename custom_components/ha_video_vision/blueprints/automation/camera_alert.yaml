@@ -31,6 +31,28 @@ blueprint:
           filter:
             integration: mobile_app
 
+    notify_start:
+      name: "Notify After"
+      description: "Only send notifications after this time (leave default for always)"
+      default: "00:00:00"
+      selector:
+        time:
+
+    notify_end:
+      name: "Notify Before"
+      description: "Only send notifications before this time (leave default for always)"
+      default: "23:59:59"
+      selector:
+        time:
+
+    custom_prompt:
+      name: "Custom Prompt (Optional)"
+      description: "Override the AI prompt. Leave empty for default factual description."
+      default: ""
+      selector:
+        text:
+          multiline: true
+
     cooldown:
       name: "Cooldown (minutes)"
       description: "Wait time between notifications for this camera"
@@ -64,7 +86,12 @@ variables:
   critical: !input critical_alert
   tap_nav: !input tap_navigate
   camera_input: !input camera_name
-  # Build service names from device IDs (same method as LLM Vision)
+  user_prompt: !input custom_prompt
+  time_start: !input notify_start
+  time_end: !input notify_end
+  # Default prompt - factual and deterministic
+  default_prompt: "Briefly describe what you see. Only state what is clearly visible. Do not speculate. If a person is visible, describe their appearance and actions. 2-3 sentences max."
+  # Build service names from device IDs
   device_services: >
     {% set ns = namespace(services=[]) %}
     {% for device_id in notify_devices %}
@@ -79,16 +106,23 @@ trigger:
     entity_id: !input person_sensor
     to: "on"
 
+condition:
+  # Check if current time is within notification window
+  - condition: time
+    after: !input notify_start
+    before: !input notify_end
+
 action:
   # Wait for camera to capture
   - delay:
       seconds: 1
 
-  # Analyze camera
+  # Analyze camera with prompt
   - service: ha_video_vision.analyze_camera
     data:
       camera: !input camera_name
       duration: 3
+      user_query: "{{ user_prompt if user_prompt else default_prompt }}"
     response_variable: result
 
   # Send notifications if successful
@@ -111,7 +145,7 @@ action:
                 {% endif %}
                 {{ result.description }}
 
-          # Send to all devices - same format as LLM Vision blueprint
+          # Send to all devices
           - repeat:
               for_each: "{{ device_services }}"
               sequence:
