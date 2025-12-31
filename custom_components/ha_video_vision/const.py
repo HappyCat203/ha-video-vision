@@ -94,56 +94,13 @@ DEFAULT_RTSP_STREAM_TYPE: Final = "sub"
 DEFAULT_CAMERAS: Final = {}
 
 # =============================================================================
-# VIDEO/IMAGE QUALITY PRESETS
-# =============================================================================
-CONF_QUALITY_PRESET: Final = "quality_preset"
-
-QUALITY_PRESET_LOW: Final = "low"
-QUALITY_PRESET_MEDIUM: Final = "medium"
-QUALITY_PRESET_HIGH: Final = "high"
-QUALITY_PRESET_ULTRA: Final = "ultra"
-QUALITY_PRESET_CUSTOM: Final = "custom"
-
-ALL_QUALITY_PRESETS: Final = [
-    QUALITY_PRESET_LOW,
-    QUALITY_PRESET_MEDIUM,
-    QUALITY_PRESET_HIGH,
-    QUALITY_PRESET_ULTRA,
-    QUALITY_PRESET_CUSTOM,
-]
-
-QUALITY_PRESET_NAMES: Final = {
-    QUALITY_PRESET_LOW: "Low (Fast, Small Files)",
-    QUALITY_PRESET_MEDIUM: "Medium (Balanced)",
-    QUALITY_PRESET_HIGH: "High (Better Quality)",
-    QUALITY_PRESET_ULTRA: "Ultra (Best Quality)",
-    QUALITY_PRESET_CUSTOM: "Custom (Manual Settings)",
-}
-
-# Preset configurations: (width, crf, fps)
-QUALITY_PRESET_VALUES: Final = {
-    QUALITY_PRESET_LOW: {"width": 480, "crf": 32, "fps": 8},
-    QUALITY_PRESET_MEDIUM: {"width": 640, "crf": 28, "fps": 10},
-    QUALITY_PRESET_HIGH: {"width": 720, "crf": 23, "fps": 12},
-    QUALITY_PRESET_ULTRA: {"width": 1080, "crf": 18, "fps": 15},
-}
-
-DEFAULT_QUALITY_PRESET: Final = QUALITY_PRESET_MEDIUM
-
-# =============================================================================
-# VIDEO SETTINGS (for custom preset or overrides)
+# VIDEO SETTINGS
 # =============================================================================
 CONF_VIDEO_DURATION: Final = "video_duration"
 CONF_VIDEO_WIDTH: Final = "video_width"
-CONF_VIDEO_CRF: Final = "video_crf"
-CONF_VIDEO_FPS: Final = "video_fps"
-CONF_FRAME_FOR_FACIAL: Final = "frame_for_facial"
 
 DEFAULT_VIDEO_DURATION: Final = 3
 DEFAULT_VIDEO_WIDTH: Final = 640
-DEFAULT_VIDEO_CRF: Final = 28
-DEFAULT_VIDEO_FPS: Final = 10
-DEFAULT_FRAME_FOR_FACIAL: Final = 30
 
 # =============================================================================
 # SNAPSHOT SETTINGS

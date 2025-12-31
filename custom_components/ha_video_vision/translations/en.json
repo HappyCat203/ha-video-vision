@@ -75,13 +75,10 @@
       },
       "video_quality": {
         "title": "Video Quality",
-        "description": "Choose a preset or customize recording settings. {preset_hint}",
+        "description": "Configure recording and snapshot settings",
         "data": {
-          "quality_preset": "Quality Preset",
           "video_duration": "Recording Duration",
           "video_width": "Resolution",
-          "video_fps": "Frame Rate",
-          "video_crf": "Compression Quality",
           "snapshot_quality": "Snapshot Quality",
           "snapshot_dir": "Snapshot Directory"
         }
@@ -91,8 +88,7 @@
         "description": "Control AI response behavior. {temp_hint}",
         "data": {
           "vllm_max_tokens": "Max Response Length (tokens)",
-          "vllm_temperature": "Temperature (creativity)",
-          "frame_for_facial": "Frame for Facial Recognition"
+          "vllm_temperature": "Temperature (creativity)"
         }
       }
     }

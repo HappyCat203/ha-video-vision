@@ -56,14 +56,8 @@ from .const import (
     # Video
     CONF_VIDEO_DURATION,
     CONF_VIDEO_WIDTH,
-    CONF_VIDEO_CRF,
-    CONF_VIDEO_FPS,
-    CONF_FRAME_FOR_FACIAL,
     DEFAULT_VIDEO_DURATION,
     DEFAULT_VIDEO_WIDTH,
-    DEFAULT_VIDEO_CRF,
-    DEFAULT_VIDEO_FPS,
-    DEFAULT_FRAME_FOR_FACIAL,
     # Snapshot
     CONF_SNAPSHOT_DIR,
     CONF_SNAPSHOT_QUALITY,
@@ -77,7 +71,6 @@ from .const import (
     ATTR_CAMERA,
     ATTR_DURATION,
     ATTR_USER_QUERY,
-    ATTR_NOTIFY,
     ATTR_IMAGE_PATH,
 )
 
@@ -328,17 +321,14 @@ class VideoAnalyzer:
         # Video settings
         self.video_duration = config.get(CONF_VIDEO_DURATION, DEFAULT_VIDEO_DURATION)
         self.video_width = config.get(CONF_VIDEO_WIDTH, DEFAULT_VIDEO_WIDTH)
-        self.video_crf = config.get(CONF_VIDEO_CRF, DEFAULT_VIDEO_CRF)
-        self.video_fps = config.get(CONF_VIDEO_FPS, DEFAULT_VIDEO_FPS)
-        self.frame_for_facial = config.get(CONF_FRAME_FOR_FACIAL, DEFAULT_FRAME_FOR_FACIAL)
 
         # Snapshot settings
         self.snapshot_dir = config.get(CONF_SNAPSHOT_DIR, DEFAULT_SNAPSHOT_DIR)
         self.snapshot_quality = config.get(CONF_SNAPSHOT_QUALITY, DEFAULT_SNAPSHOT_QUALITY)
 
         _LOGGER.info(
-            "HA Video Vision config updated - Provider: %s, Cameras: %d, Quality: %dp@%dfps",
-            self.provider, len(self.selected_cameras), self.video_width, self.video_fps
+            "HA Video Vision config updated - Provider: %s, Cameras: %d, Resolution: %dp",
+            self.provider, len(self.selected_cameras), self.video_width
         )
 
     def _normalize_name(self, name: str) -> str:
@@ -496,10 +486,10 @@ class VideoAnalyzer:
                 "-i", stream_url,
                 "-t", str(duration),
                 "-vf", f"scale={self.video_width}:-2",
-                "-r", str(self.video_fps),
+                "-r", "10",
                 "-c:v", "libx264",
                 "-preset", "ultrafast",
-                "-crf", str(self.video_crf),
+                "-crf", "28",
                 "-an",
                 video_path
             ]
@@ -573,10 +563,10 @@ class VideoAnalyzer:
                 "-i", stream_url,
                 "-t", str(duration),
                 "-vf", f"scale={self.video_width}:-2",
-                "-r", str(self.video_fps),
+                "-r", "10",
                 "-c:v", "libx264",
                 "-preset", "ultrafast",
-                "-crf", str(self.video_crf),
+                "-crf", "28",
                 "-an",
                 video_path
             ]

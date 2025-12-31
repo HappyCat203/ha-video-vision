@@ -48,24 +48,11 @@ from .const import (
     DEFAULT_FACIAL_REC_URL,
     DEFAULT_FACIAL_REC_ENABLED,
     DEFAULT_FACIAL_REC_CONFIDENCE,
-    # Quality Presets
-    CONF_QUALITY_PRESET,
-    ALL_QUALITY_PRESETS,
-    QUALITY_PRESET_NAMES,
-    QUALITY_PRESET_VALUES,
-    QUALITY_PRESET_CUSTOM,
-    DEFAULT_QUALITY_PRESET,
     # Video Settings
     CONF_VIDEO_DURATION,
     CONF_VIDEO_WIDTH,
-    CONF_VIDEO_CRF,
-    CONF_VIDEO_FPS,
-    CONF_FRAME_FOR_FACIAL,
     DEFAULT_VIDEO_DURATION,
     DEFAULT_VIDEO_WIDTH,
-    DEFAULT_VIDEO_CRF,
-    DEFAULT_VIDEO_FPS,
-    DEFAULT_FRAME_FOR_FACIAL,
     # Snapshot
     CONF_SNAPSHOT_DIR,
     CONF_SNAPSHOT_QUALITY,
@@ -463,49 +450,21 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
     async def async_step_video_quality(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle video/image quality settings with presets."""
+        """Handle video/image quality settings."""
         if user_input is not None:
-            preset = user_input.get(CONF_QUALITY_PRESET, DEFAULT_QUALITY_PRESET)
-
-            # If using a preset, apply its values
-            if preset != QUALITY_PRESET_CUSTOM and preset in QUALITY_PRESET_VALUES:
-                preset_values = QUALITY_PRESET_VALUES[preset]
-                user_input[CONF_VIDEO_WIDTH] = preset_values["width"]
-                user_input[CONF_VIDEO_CRF] = preset_values["crf"]
-                user_input[CONF_VIDEO_FPS] = preset_values["fps"]
-            else:
-                # Custom - use user's manual values
-                if CONF_VIDEO_WIDTH in user_input:
-                    user_input[CONF_VIDEO_WIDTH] = int(user_input[CONF_VIDEO_WIDTH])
-                if CONF_VIDEO_CRF in user_input:
-                    user_input[CONF_VIDEO_CRF] = int(user_input[CONF_VIDEO_CRF])
-                if CONF_VIDEO_FPS in user_input:
-                    user_input[CONF_VIDEO_FPS] = int(user_input[CONF_VIDEO_FPS])
+            # Convert width to int
+            if CONF_VIDEO_WIDTH in user_input:
+                user_input[CONF_VIDEO_WIDTH] = int(user_input[CONF_VIDEO_WIDTH])
 
             new_options = {**self._entry.options, **user_input}
             return self.async_create_entry(title="", data=new_options)
 
         current = {**self._entry.data, **self._entry.options}
 
-        # Build preset options
-        preset_options = [
-            selector.SelectOptionDict(value=p, label=QUALITY_PRESET_NAMES[p])
-            for p in ALL_QUALITY_PRESETS
-        ]
-
         return self.async_show_form(
             step_id="video_quality",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_QUALITY_PRESET,
-                        default=current.get(CONF_QUALITY_PRESET, DEFAULT_QUALITY_PRESET),
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=preset_options,
-                            mode=selector.SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
                     vol.Required(
                         CONF_VIDEO_DURATION,
                         default=current.get(CONF_VIDEO_DURATION, DEFAULT_VIDEO_DURATION),
@@ -518,48 +477,21 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
                             mode=selector.NumberSelectorMode.SLIDER,
                         )
                     ),
-                    vol.Optional(
+                    vol.Required(
                         CONF_VIDEO_WIDTH,
                         default=str(current.get(CONF_VIDEO_WIDTH, DEFAULT_VIDEO_WIDTH)),
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[
-                                {"label": "480p (Fast)", "value": "480"},
-                                {"label": "640p (Balanced)", "value": "640"},
-                                {"label": "720p (Good)", "value": "720"},
-                                {"label": "1080p (Best)", "value": "1080"},
+                                {"label": "480p", "value": "480"},
+                                {"label": "640p", "value": "640"},
+                                {"label": "720p", "value": "720"},
+                                {"label": "1080p", "value": "1080"},
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
-                    vol.Optional(
-                        CONF_VIDEO_FPS,
-                        default=current.get(CONF_VIDEO_FPS, DEFAULT_VIDEO_FPS),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=5,
-                            max=30,
-                            step=1,
-                            unit_of_measurement="fps",
-                            mode=selector.NumberSelectorMode.SLIDER,
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_VIDEO_CRF,
-                        default=str(current.get(CONF_VIDEO_CRF, DEFAULT_VIDEO_CRF)),
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                {"label": "18 - Best Quality", "value": "18"},
-                                {"label": "23 - High Quality", "value": "23"},
-                                {"label": "28 - Balanced", "value": "28"},
-                                {"label": "32 - Smaller Files", "value": "32"},
-                                {"label": "35 - Smallest", "value": "35"},
-                            ],
-                            mode=selector.SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
-                    vol.Optional(
+                    vol.Required(
                         CONF_SNAPSHOT_QUALITY,
                         default=current.get(CONF_SNAPSHOT_QUALITY, DEFAULT_SNAPSHOT_QUALITY),
                     ): selector.NumberSelector(
@@ -577,9 +509,6 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
                     ): str,
                 }
             ),
-            description_placeholders={
-                "preset_hint": "Choose a preset or select 'Custom' to manually adjust settings.",
-            },
         )
 
     async def async_step_ai_settings(
@@ -615,18 +544,6 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
                             min=0.0,
                             max=1.0,
                             step=0.1,
-                            mode=selector.NumberSelectorMode.SLIDER,
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_FRAME_FOR_FACIAL,
-                        default=current.get(CONF_FRAME_FOR_FACIAL, DEFAULT_FRAME_FOR_FACIAL),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=1,
-                            max=90,
-                            step=1,
-                            unit_of_measurement="frames",
                             mode=selector.NumberSelectorMode.SLIDER,
                         )
                     ),
