@@ -5,7 +5,9 @@ import asyncio
 import base64
 import logging
 import os
+import shutil
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import aiofiles
@@ -86,6 +88,61 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Bundled blueprints
+BLUEPRINTS = [
+    {
+        "domain": "automation",
+        "filename": "camera_alert.yaml",
+    },
+]
+
+
+async def async_import_blueprints(hass: HomeAssistant) -> None:
+    """Import bundled blueprints to the user's blueprints directory."""
+    try:
+        # Get the blueprints directory in the integration
+        integration_dir = Path(__file__).parent
+        blueprints_source = integration_dir / "blueprints"
+
+        # Get the target blueprints directory in config
+        blueprints_target = Path(hass.config.path("blueprints"))
+
+        for blueprint in BLUEPRINTS:
+            domain = blueprint["domain"]
+            filename = blueprint["filename"]
+
+            source_file = blueprints_source / domain / filename
+            target_dir = blueprints_target / domain / DOMAIN
+            target_file = target_dir / filename
+
+            if not source_file.exists():
+                _LOGGER.warning("Blueprint not found: %s", source_file)
+                continue
+
+            # Create target directory if it doesn't exist
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            # Copy blueprint if it doesn't exist or is outdated
+            should_copy = False
+            if not target_file.exists():
+                should_copy = True
+                _LOGGER.info("Installing blueprint: %s", filename)
+            else:
+                # Check if source is newer
+                source_mtime = source_file.stat().st_mtime
+                target_mtime = target_file.stat().st_mtime
+                if source_mtime > target_mtime:
+                    should_copy = True
+                    _LOGGER.info("Updating blueprint: %s", filename)
+
+            if should_copy:
+                shutil.copy2(source_file, target_file)
+                _LOGGER.info("Blueprint installed: %s -> %s", filename, target_file)
+
+    except Exception as e:
+        _LOGGER.warning("Failed to import blueprints: %s", e)
+
+
 # Service schemas
 SERVICE_ANALYZE_SCHEMA = vol.Schema(
     {
@@ -142,7 +199,10 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up HA Video Vision from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    
+
+    # Import bundled blueprints
+    await async_import_blueprints(hass)
+
     # Merge data and options
     config = {**entry.data, **entry.options}
     
