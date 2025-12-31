@@ -27,12 +27,16 @@ from .const import (
     PROVIDER_BASE_URLS,
     PROVIDER_DEFAULT_MODELS,
     DEFAULT_PROVIDER,
-    # vLLM
+    # AI Settings
     CONF_VLLM_URL,
     CONF_VLLM_MODEL,
+    CONF_VLLM_MAX_TOKENS,
+    CONF_VLLM_TEMPERATURE,
     DEFAULT_VLLM_URL,
     DEFAULT_VLLM_MODEL,
-    # Cameras - NEW
+    DEFAULT_VLLM_MAX_TOKENS,
+    DEFAULT_VLLM_TEMPERATURE,
+    # Cameras
     CONF_SELECTED_CAMERAS,
     DEFAULT_SELECTED_CAMERAS,
     CONF_CAMERA_ALIASES,
@@ -44,27 +48,16 @@ from .const import (
     DEFAULT_FACIAL_REC_URL,
     DEFAULT_FACIAL_REC_ENABLED,
     DEFAULT_FACIAL_REC_CONFIDENCE,
-    # Video - FULL SETTINGS
+    # Video Settings
     CONF_VIDEO_DURATION,
     CONF_VIDEO_WIDTH,
-    CONF_VIDEO_CRF,
-    CONF_FRAME_FOR_FACIAL,
     DEFAULT_VIDEO_DURATION,
     DEFAULT_VIDEO_WIDTH,
-    DEFAULT_VIDEO_CRF,
-    DEFAULT_FRAME_FOR_FACIAL,
     # Snapshot
     CONF_SNAPSHOT_DIR,
+    CONF_SNAPSHOT_QUALITY,
     DEFAULT_SNAPSHOT_DIR,
-    # Notifications
-    CONF_NOTIFY_SERVICES,
-    CONF_IOS_DEVICES,
-    CONF_COOLDOWN_SECONDS,
-    CONF_CRITICAL_ALERTS,
-    DEFAULT_NOTIFY_SERVICES,
-    DEFAULT_IOS_DEVICES,
-    DEFAULT_COOLDOWN_SECONDS,
-    DEFAULT_CRITICAL_ALERTS,
+    DEFAULT_SNAPSHOT_QUALITY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -172,7 +165,7 @@ class VideoVisionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle camera selection step - Auto-discovered!"""
         if user_input is not None:
             self._data[CONF_SELECTED_CAMERAS] = user_input.get(CONF_SELECTED_CAMERAS, [])
-            
+
             # Create the config entry
             return self.async_create_entry(
                 title="HA Video Vision",
@@ -253,8 +246,8 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
                 "cameras",
                 "voice_aliases",
                 "facial_rec",
-                "video",
-                "notifications",
+                "video_quality",
+                "ai_settings",
             ],
         )
 
@@ -379,7 +372,7 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
             # Parse aliases from text
             aliases = {}
             alias_text = user_input.get("alias_config", "")
-            
+
             for line in alias_text.strip().split("\n"):
                 line = line.strip()
                 if not line or ":" not in line:
@@ -390,18 +383,18 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
                     camera_id = parts[1].strip()
                     if voice_name and camera_id:
                         aliases[voice_name] = camera_id
-            
+
             new_options = {**self._entry.options, CONF_CAMERA_ALIASES: aliases}
             return self.async_create_entry(title="", data=new_options)
 
         current = {**self._entry.data, **self._entry.options}
         aliases = current.get(CONF_CAMERA_ALIASES, DEFAULT_CAMERA_ALIASES)
         selected_cameras = current.get(CONF_SELECTED_CAMERAS, [])
-        
+
         # Build current alias text
         alias_lines = [f"{name}:{camera}" for name, camera in aliases.items()]
         alias_text = "\n".join(alias_lines) if alias_lines else ""
-        
+
         # Build hint showing available cameras
         camera_hints = []
         for entity_id in selected_cameras:
@@ -409,7 +402,7 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
             if state:
                 friendly = state.attributes.get("friendly_name", entity_id)
                 camera_hints.append(f"{entity_id} ({friendly})")
-        
+
         return self.async_show_form(
             step_id="voice_aliases",
             data_schema=vol.Schema({
@@ -454,64 +447,62 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
             ),
         )
 
-    async def async_step_video(
+    async def async_step_video_quality(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle video recording settings."""
+        """Handle video/image quality settings."""
         if user_input is not None:
-            # Convert string values to integers
+            # Convert width to int
             if CONF_VIDEO_WIDTH in user_input:
                 user_input[CONF_VIDEO_WIDTH] = int(user_input[CONF_VIDEO_WIDTH])
-            if CONF_VIDEO_CRF in user_input:
-                user_input[CONF_VIDEO_CRF] = int(user_input[CONF_VIDEO_CRF])
-            
+
             new_options = {**self._entry.options, **user_input}
             return self.async_create_entry(title="", data=new_options)
 
         current = {**self._entry.data, **self._entry.options}
 
         return self.async_show_form(
-            step_id="video",
+            step_id="video_quality",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
+                    vol.Required(
                         CONF_VIDEO_DURATION,
                         default=current.get(CONF_VIDEO_DURATION, DEFAULT_VIDEO_DURATION),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
-                    vol.Optional(
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1,
+                            max=10,
+                            step=1,
+                            unit_of_measurement="seconds",
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
+                    ),
+                    vol.Required(
                         CONF_VIDEO_WIDTH,
                         default=str(current.get(CONF_VIDEO_WIDTH, DEFAULT_VIDEO_WIDTH)),
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[
-                                {"label": "320p (Fastest, Smallest)", "value": "320"},
-                                {"label": "480p (Fast, Small)", "value": "480"},
-                                {"label": "640p (Balanced)", "value": "640"},
-                                {"label": "720p (Good Quality)", "value": "720"},
-                                {"label": "1080p (Best Quality, Largest)", "value": "1080"},
+                                {"label": "480p", "value": "480"},
+                                {"label": "640p", "value": "640"},
+                                {"label": "720p", "value": "720"},
+                                {"label": "1080p", "value": "1080"},
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
-                    vol.Optional(
-                        CONF_VIDEO_CRF,
-                        default=str(current.get(CONF_VIDEO_CRF, DEFAULT_VIDEO_CRF)),
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                {"label": "18 - Best Quality (Larger File)", "value": "18"},
-                                {"label": "23 - High Quality", "value": "23"},
-                                {"label": "28 - Balanced (Default)", "value": "28"},
-                                {"label": "32 - Smaller File", "value": "32"},
-                                {"label": "35 - Smallest File (Lower Quality)", "value": "35"},
-                            ],
-                            mode=selector.SelectSelectorMode.DROPDOWN,
+                    vol.Required(
+                        CONF_SNAPSHOT_QUALITY,
+                        default=current.get(CONF_SNAPSHOT_QUALITY, DEFAULT_SNAPSHOT_QUALITY),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=50,
+                            max=100,
+                            step=5,
+                            unit_of_measurement="%",
+                            mode=selector.NumberSelectorMode.SLIDER,
                         )
                     ),
-                    vol.Optional(
-                        CONF_FRAME_FOR_FACIAL,
-                        default=current.get(CONF_FRAME_FOR_FACIAL, DEFAULT_FRAME_FOR_FACIAL),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=90)),
                     vol.Optional(
                         CONF_SNAPSHOT_DIR,
                         default=current.get(CONF_SNAPSHOT_DIR, DEFAULT_SNAPSHOT_DIR),
@@ -520,52 +511,45 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
             ),
         )
 
-    async def async_step_notifications(
+    async def async_step_ai_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle notification settings."""
+        """Handle AI response settings."""
         if user_input is not None:
-            # Parse notify services
-            services = [s.strip() for s in user_input.get("notify_services_text", "").split(",") if s.strip()]
-            user_input[CONF_NOTIFY_SERVICES] = services
-            del user_input["notify_services_text"]
-            
-            # Parse iOS devices
-            ios_devices = [s.strip() for s in user_input.get("ios_devices_text", "").split(",") if s.strip()]
-            user_input[CONF_IOS_DEVICES] = ios_devices
-            del user_input["ios_devices_text"]
-            
             new_options = {**self._entry.options, **user_input}
             return self.async_create_entry(title="", data=new_options)
 
         current = {**self._entry.data, **self._entry.options}
-        
-        notify_services = current.get(CONF_NOTIFY_SERVICES, DEFAULT_NOTIFY_SERVICES)
-        notify_text = ", ".join(notify_services) if notify_services else ""
-        
-        ios_devices = current.get(CONF_IOS_DEVICES, DEFAULT_IOS_DEVICES)
-        ios_text = ", ".join(ios_devices) if ios_devices else ""
 
         return self.async_show_form(
-            step_id="notifications",
+            step_id="ai_settings",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        "notify_services_text",
-                        default=notify_text,
-                    ): str,
-                    vol.Optional(
-                        "ios_devices_text",
-                        default=ios_text,
-                    ): str,
-                    vol.Optional(
-                        CONF_COOLDOWN_SECONDS,
-                        default=current.get(CONF_COOLDOWN_SECONDS, DEFAULT_COOLDOWN_SECONDS),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=3600)),
-                    vol.Optional(
-                        CONF_CRITICAL_ALERTS,
-                        default=current.get(CONF_CRITICAL_ALERTS, DEFAULT_CRITICAL_ALERTS),
-                    ): bool,
+                    vol.Required(
+                        CONF_VLLM_MAX_TOKENS,
+                        default=current.get(CONF_VLLM_MAX_TOKENS, DEFAULT_VLLM_MAX_TOKENS),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=50,
+                            max=500,
+                            step=10,
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
+                    ),
+                    vol.Required(
+                        CONF_VLLM_TEMPERATURE,
+                        default=current.get(CONF_VLLM_TEMPERATURE, DEFAULT_VLLM_TEMPERATURE),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.0,
+                            max=1.0,
+                            step=0.1,
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
+                    ),
                 }
             ),
+            description_placeholders={
+                "temp_hint": "Lower = more consistent/factual. Higher = more creative.",
+            },
         )

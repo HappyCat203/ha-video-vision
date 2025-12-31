@@ -1,10 +1,10 @@
 analyze_camera:
   name: Analyze Camera
-  description: Record video from camera, run facial recognition, and analyze with AI (video-only providers).
+  description: Record video from camera, run facial recognition, and analyze with AI.
   fields:
     camera:
       name: Camera
-      description: Camera name to analyze
+      description: Camera name or alias to analyze
       required: true
       example: "driveway"
       selector:
@@ -21,19 +21,13 @@ analyze_camera:
           step: 1
           unit_of_measurement: seconds
     user_query:
-      name: Question
-      description: Optional question to ask about what's on camera
+      name: Prompt
+      description: Custom prompt for the AI analysis
       required: false
-      example: "Is anyone at the door?"
+      example: "Describe what you see. Only state what is visible."
       selector:
         text:
-    notify:
-      name: Send Notification
-      description: Send push notification with the result
-      required: false
-      default: false
-      selector:
-        boolean:
+          multiline: true
 
 record_clip:
   name: Record Clip
@@ -41,7 +35,7 @@ record_clip:
   fields:
     camera:
       name: Camera
-      description: Camera name to record from
+      description: Camera name or alias to record from
       required: true
       example: "porch"
       selector:
@@ -60,7 +54,7 @@ record_clip:
 
 identify_faces:
   name: Identify Faces
-  description: Run facial recognition on an image.
+  description: Run facial recognition on an image file.
   fields:
     image_path:
       name: Image Path

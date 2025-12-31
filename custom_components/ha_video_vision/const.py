@@ -44,7 +44,7 @@ PROVIDER_DEFAULT_MODELS: Final = {
 DEFAULT_PROVIDER: Final = PROVIDER_OPENROUTER
 
 # =============================================================================
-# vLLM CONFIGURATION (for local/custom endpoints)
+# AI CONFIGURATION
 # =============================================================================
 CONF_VLLM_URL: Final = "vllm_url"
 CONF_VLLM_MODEL: Final = "vllm_model"
@@ -54,7 +54,7 @@ CONF_VLLM_TEMPERATURE: Final = "vllm_temperature"
 DEFAULT_VLLM_URL: Final = "http://localhost:1234/v1"
 DEFAULT_VLLM_MODEL: Final = "local-model"
 DEFAULT_VLLM_MAX_TOKENS: Final = 150
-DEFAULT_VLLM_TEMPERATURE: Final = 0.3
+DEFAULT_VLLM_TEMPERATURE: Final = 0.2  # Lower = more deterministic
 
 # =============================================================================
 # FACIAL RECOGNITION CONFIGURATION
@@ -70,7 +70,7 @@ DEFAULT_FACIAL_REC_CONFIDENCE: Final = 50
 # =============================================================================
 # CAMERA CONFIGURATION - AUTO-DISCOVERY
 # =============================================================================
-# NEW: Selected camera entity IDs from auto-discovery
+# Selected camera entity IDs from auto-discovery
 CONF_SELECTED_CAMERAS: Final = "selected_cameras"
 DEFAULT_SELECTED_CAMERAS: Final = []
 
@@ -98,32 +98,18 @@ DEFAULT_CAMERAS: Final = {}
 # =============================================================================
 CONF_VIDEO_DURATION: Final = "video_duration"
 CONF_VIDEO_WIDTH: Final = "video_width"
-CONF_VIDEO_CRF: Final = "video_crf"
-CONF_FRAME_FOR_FACIAL: Final = "frame_for_facial"
 
 DEFAULT_VIDEO_DURATION: Final = 3
 DEFAULT_VIDEO_WIDTH: Final = 640
-DEFAULT_VIDEO_CRF: Final = 28
-DEFAULT_FRAME_FOR_FACIAL: Final = 30
 
 # =============================================================================
 # SNAPSHOT SETTINGS
 # =============================================================================
 CONF_SNAPSHOT_DIR: Final = "snapshot_dir"
+CONF_SNAPSHOT_QUALITY: Final = "snapshot_quality"
+
 DEFAULT_SNAPSHOT_DIR: Final = "/media/ha_video_vision"
-
-# =============================================================================
-# NOTIFICATION SETTINGS
-# =============================================================================
-CONF_NOTIFY_SERVICES: Final = "notify_services"
-CONF_IOS_DEVICES: Final = "ios_devices"
-CONF_COOLDOWN_SECONDS: Final = "cooldown_seconds"
-CONF_CRITICAL_ALERTS: Final = "critical_alerts"
-
-DEFAULT_NOTIFY_SERVICES: Final = []
-DEFAULT_IOS_DEVICES: Final = []
-DEFAULT_COOLDOWN_SECONDS: Final = 120
-DEFAULT_CRITICAL_ALERTS: Final = False
+DEFAULT_SNAPSHOT_QUALITY: Final = 85  # JPEG quality 1-100
 
 # =============================================================================
 # SERVICE NAMES

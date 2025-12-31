@@ -37,8 +37,8 @@
           "cameras": "Select Cameras",
           "voice_aliases": "Voice Aliases",
           "facial_rec": "Facial Recognition",
-          "video": "Video Settings",
-          "notifications": "Notifications"
+          "video_quality": "Video Quality",
+          "ai_settings": "AI Settings"
         }
       },
       "provider": {
@@ -73,25 +73,22 @@
           "facial_rec_confidence": "Minimum Confidence (%)"
         }
       },
-      "video": {
-        "title": "Video Settings",
-        "description": "Configure video recording quality and compression",
+      "video_quality": {
+        "title": "Video Quality",
+        "description": "Configure recording and snapshot settings",
         "data": {
-          "video_duration": "Recording Duration (seconds)",
-          "video_width": "Video Resolution",
-          "video_crf": "Compression Quality (CRF)",
-          "frame_for_facial": "Frame # for Facial Recognition",
+          "video_duration": "Recording Duration",
+          "video_width": "Resolution",
+          "snapshot_quality": "Snapshot Quality",
           "snapshot_dir": "Snapshot Directory"
         }
       },
-      "notifications": {
-        "title": "Notification Settings",
-        "description": "Configure which devices receive AI analysis notifications",
+      "ai_settings": {
+        "title": "AI Settings",
+        "description": "Control AI response behavior. {temp_hint}",
         "data": {
-          "notify_services_text": "Notify Services (comma-separated, e.g. notify.mobile_app_phone)",
-          "ios_devices_text": "iOS Devices (for image attachments)",
-          "cooldown_seconds": "Cooldown Between Notifications (seconds)",
-          "critical_alerts": "Send as Critical Alerts (iOS)"
+          "vllm_max_tokens": "Max Response Length (tokens)",
+          "vllm_temperature": "Temperature (creativity)"
         }
       }
     }

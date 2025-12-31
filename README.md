@@ -239,7 +239,37 @@ iOS Devices: notify.mobile_app_carlos_iphone
 
 ---
 
+## 📋 Bundled Blueprint
+
+**HA Video Vision includes a ready-to-use blueprint** that automatically installs when you set up the integration!
+
+### Camera Alert Blueprint
+
+Creates smart notifications when person is detected:
+- Records video and runs AI analysis
+- Facial recognition (if enabled)
+- Mobile notifications with snapshots
+- Works with iOS and Android
+
+**To use the blueprint:**
+
+1. Go to **Settings** → **Automations & Scenes** → **Blueprints**
+2. Find **"HA Video Vision - Camera Alert"** (auto-installed)
+3. Click **"Create Automation"**
+4. Configure:
+   - **Person Sensor**: Your motion/person detection sensor
+   - **Camera Name**: Camera alias (e.g., "porch", "driveway")
+   - **Notify Devices**: Select your mobile devices
+   - **Cooldown**: Minutes between notifications
+   - **Critical Alert**: Bypass Do Not Disturb (iOS)
+
+That's it! No YAML required.
+
+---
+
 ## 📋 Example Automation
+
+For custom automations, use the service directly:
 
 ```yaml
 automation:
@@ -354,6 +384,8 @@ When you say "check the garage camera", the system:
 
 | Version | Changes |
 |---------|---------|
+| **4.1.0** | Bundled blueprints - auto-install Camera Alert blueprint |
+| **4.0.0** | Auto-discovery, voice aliases, multi-provider config storage |
 | **3.0.0** | Video-only providers, OpenRouter default, simplified config |
 | **2.0.0** | Multi-provider, facial recognition |
 | **1.0.0** | Initial release |

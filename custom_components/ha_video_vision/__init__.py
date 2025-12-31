@@ -5,7 +5,9 @@ import asyncio
 import base64
 import logging
 import os
+import shutil
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import aiofiles
@@ -30,7 +32,7 @@ from .const import (
     PROVIDER_BASE_URLS,
     PROVIDER_DEFAULT_MODELS,
     DEFAULT_PROVIDER,
-    # vLLM
+    # AI Settings
     CONF_VLLM_URL,
     CONF_VLLM_MODEL,
     CONF_VLLM_MAX_TOKENS,
@@ -46,7 +48,7 @@ from .const import (
     DEFAULT_FACIAL_REC_URL,
     DEFAULT_FACIAL_REC_ENABLED,
     DEFAULT_FACIAL_REC_CONFIDENCE,
-    # Cameras - NEW Auto-Discovery
+    # Cameras - Auto-Discovery
     CONF_SELECTED_CAMERAS,
     DEFAULT_SELECTED_CAMERAS,
     CONF_CAMERA_ALIASES,
@@ -54,24 +56,13 @@ from .const import (
     # Video
     CONF_VIDEO_DURATION,
     CONF_VIDEO_WIDTH,
-    CONF_VIDEO_CRF,
-    CONF_FRAME_FOR_FACIAL,
     DEFAULT_VIDEO_DURATION,
     DEFAULT_VIDEO_WIDTH,
-    DEFAULT_VIDEO_CRF,
-    DEFAULT_FRAME_FOR_FACIAL,
     # Snapshot
     CONF_SNAPSHOT_DIR,
+    CONF_SNAPSHOT_QUALITY,
     DEFAULT_SNAPSHOT_DIR,
-    # Notifications
-    CONF_NOTIFY_SERVICES,
-    CONF_IOS_DEVICES,
-    CONF_COOLDOWN_SECONDS,
-    CONF_CRITICAL_ALERTS,
-    DEFAULT_NOTIFY_SERVICES,
-    DEFAULT_IOS_DEVICES,
-    DEFAULT_COOLDOWN_SECONDS,
-    DEFAULT_CRITICAL_ALERTS,
+    DEFAULT_SNAPSHOT_QUALITY,
     # Services
     SERVICE_ANALYZE_CAMERA,
     SERVICE_RECORD_CLIP,
@@ -80,11 +71,65 @@ from .const import (
     ATTR_CAMERA,
     ATTR_DURATION,
     ATTR_USER_QUERY,
-    ATTR_NOTIFY,
     ATTR_IMAGE_PATH,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Bundled blueprints
+BLUEPRINTS = [
+    {
+        "domain": "automation",
+        "filename": "camera_alert.yaml",
+    },
+]
+
+
+async def async_import_blueprints(hass: HomeAssistant) -> None:
+    """Import bundled blueprints to the user's blueprints directory."""
+    try:
+        # Get the blueprints directory in the integration
+        integration_dir = Path(__file__).parent
+        blueprints_source = integration_dir / "blueprints"
+
+        # Get the target blueprints directory in config
+        blueprints_target = Path(hass.config.path("blueprints"))
+
+        for blueprint in BLUEPRINTS:
+            domain = blueprint["domain"]
+            filename = blueprint["filename"]
+
+            source_file = blueprints_source / domain / filename
+            target_dir = blueprints_target / domain / DOMAIN
+            target_file = target_dir / filename
+
+            if not source_file.exists():
+                _LOGGER.warning("Blueprint not found: %s", source_file)
+                continue
+
+            # Create target directory if it doesn't exist
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            # Copy blueprint if it doesn't exist or is outdated
+            should_copy = False
+            if not target_file.exists():
+                should_copy = True
+                _LOGGER.info("Installing blueprint: %s", filename)
+            else:
+                # Check if source is newer
+                source_mtime = source_file.stat().st_mtime
+                target_mtime = target_file.stat().st_mtime
+                if source_mtime > target_mtime:
+                    should_copy = True
+                    _LOGGER.info("Updating blueprint: %s", filename)
+
+            if should_copy:
+                shutil.copy2(source_file, target_file)
+                _LOGGER.info("Blueprint installed: %s -> %s", filename, target_file)
+
+    except Exception as e:
+        _LOGGER.warning("Failed to import blueprints: %s", e)
+
 
 # Service schemas
 SERVICE_ANALYZE_SCHEMA = vol.Schema(
@@ -92,7 +137,6 @@ SERVICE_ANALYZE_SCHEMA = vol.Schema(
         vol.Required(ATTR_CAMERA): cv.string,
         vol.Optional(ATTR_DURATION, default=3): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
         vol.Optional(ATTR_USER_QUERY, default=""): cv.string,
-        vol.Optional(ATTR_NOTIFY, default=False): cv.boolean,
     }
 )
 
@@ -142,7 +186,10 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up HA Video Vision from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    
+
+    # Import bundled blueprints
+    await async_import_blueprints(hass)
+
     # Merge data and options
     config = {**entry.data, **entry.options}
     
@@ -159,14 +206,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         camera = call.data[ATTR_CAMERA]
         duration = call.data.get(ATTR_DURATION, 3)
         user_query = call.data.get(ATTR_USER_QUERY, "")
-        notify = call.data.get(ATTR_NOTIFY, False)
-        
-        result = await analyzer.analyze_camera(camera, duration, user_query)
-        
-        if notify and result.get("success"):
-            await analyzer.send_notification(result)
-        
-        return result
+
+        return await analyzer.analyze_camera(camera, duration, user_query)
 
     async def handle_record_clip(call: ServiceCall) -> dict[str, Any]:
         """Handle record_clip service call."""
@@ -246,9 +287,9 @@ class VideoAnalyzer:
         # Provider settings
         self.provider = config.get(CONF_PROVIDER, DEFAULT_PROVIDER)
         self.provider_configs = config.get(CONF_PROVIDER_CONFIGS, {})
-        
+
         active_config = self.provider_configs.get(self.provider, {})
-        
+
         if active_config:
             self.api_key = active_config.get("api_key", "")
             self.vllm_model = active_config.get("model", PROVIDER_DEFAULT_MODELS.get(self.provider, ""))
@@ -256,54 +297,38 @@ class VideoAnalyzer:
         else:
             self.api_key = config.get(CONF_API_KEY, "")
             self.vllm_model = config.get(CONF_VLLM_MODEL, PROVIDER_DEFAULT_MODELS.get(self.provider, DEFAULT_VLLM_MODEL))
-            
+
             if self.provider == PROVIDER_LOCAL:
                 self.base_url = config.get(CONF_VLLM_URL, DEFAULT_VLLM_URL)
             else:
                 self.base_url = PROVIDER_BASE_URLS.get(self.provider, DEFAULT_VLLM_URL)
-        
+
+        # AI settings
         self.vllm_max_tokens = config.get(CONF_VLLM_MAX_TOKENS, DEFAULT_VLLM_MAX_TOKENS)
         self.vllm_temperature = config.get(CONF_VLLM_TEMPERATURE, DEFAULT_VLLM_TEMPERATURE)
-        
+
         # Facial recognition
         self.facial_rec_url = config.get(CONF_FACIAL_REC_URL, DEFAULT_FACIAL_REC_URL)
         self.facial_rec_enabled = config.get(CONF_FACIAL_REC_ENABLED, DEFAULT_FACIAL_REC_ENABLED)
         self.facial_rec_confidence = config.get(CONF_FACIAL_REC_CONFIDENCE, DEFAULT_FACIAL_REC_CONFIDENCE)
-        
+
         # Auto-discovered cameras (list of entity_ids)
         self.selected_cameras = config.get(CONF_SELECTED_CAMERAS, DEFAULT_SELECTED_CAMERAS)
-        
+
         # Voice aliases for easy voice commands
         self.camera_aliases = config.get(CONF_CAMERA_ALIASES, DEFAULT_CAMERA_ALIASES)
-        
+
         # Video settings
         self.video_duration = config.get(CONF_VIDEO_DURATION, DEFAULT_VIDEO_DURATION)
         self.video_width = config.get(CONF_VIDEO_WIDTH, DEFAULT_VIDEO_WIDTH)
-        self.video_crf = config.get(CONF_VIDEO_CRF, DEFAULT_VIDEO_CRF)
-        self.frame_for_facial = config.get(CONF_FRAME_FOR_FACIAL, DEFAULT_FRAME_FOR_FACIAL)
-        
+
         # Snapshot settings
         self.snapshot_dir = config.get(CONF_SNAPSHOT_DIR, DEFAULT_SNAPSHOT_DIR)
-        
-        # Notifications
-        notify_services = config.get(CONF_NOTIFY_SERVICES, DEFAULT_NOTIFY_SERVICES)
-        if isinstance(notify_services, str):
-            self.notify_services = [s.strip() for s in notify_services.split(",") if s.strip()]
-        else:
-            self.notify_services = notify_services or []
-        
-        ios_devices = config.get(CONF_IOS_DEVICES, DEFAULT_IOS_DEVICES)
-        if isinstance(ios_devices, str):
-            self.ios_devices = [s.strip() for s in ios_devices.split(",") if s.strip()]
-        else:
-            self.ios_devices = ios_devices or []
-        
-        self.cooldown_seconds = config.get(CONF_COOLDOWN_SECONDS, DEFAULT_COOLDOWN_SECONDS)
-        self.critical_alerts = config.get(CONF_CRITICAL_ALERTS, DEFAULT_CRITICAL_ALERTS)
-        
+        self.snapshot_quality = config.get(CONF_SNAPSHOT_QUALITY, DEFAULT_SNAPSHOT_QUALITY)
+
         _LOGGER.info(
-            "HA Video Vision config updated - Provider: %s, Cameras: %d",
-            self.provider, len(self.selected_cameras)
+            "HA Video Vision config updated - Provider: %s, Cameras: %d, Resolution: %dp",
+            self.provider, len(self.selected_cameras), self.video_width
         )
 
     def _normalize_name(self, name: str) -> str:
@@ -427,6 +452,51 @@ class VideoAnalyzer:
             _LOGGER.debug("Could not get stream URL for %s: %s", entity_id, e)
             return None
 
+    def _build_ffmpeg_cmd(self, stream_url: str, duration: int, output_path: str) -> list[str]:
+        """Build ffmpeg command based on stream type (RTSP vs HLS/HTTP)."""
+        # Base command
+        cmd = ["ffmpeg", "-y"]
+
+        # Add protocol-specific options
+        if stream_url.startswith("rtsp://"):
+            # RTSP stream - use TCP transport for reliability
+            cmd.extend(["-rtsp_transport", "tcp"])
+        # For HLS/HTTP streams, no special transport needed
+
+        # Input
+        cmd.extend(["-i", stream_url])
+
+        # Duration and encoding
+        cmd.extend([
+            "-t", str(duration),
+            "-vf", f"scale={self.video_width}:-2",
+            "-r", "10",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "28",
+            "-an",
+            output_path
+        ])
+
+        return cmd
+
+    def _build_ffmpeg_frame_cmd(self, stream_url: str, output_path: str) -> list[str]:
+        """Build ffmpeg command to extract a single frame."""
+        cmd = ["ffmpeg", "-y"]
+
+        if stream_url.startswith("rtsp://"):
+            cmd.extend(["-rtsp_transport", "tcp"])
+
+        cmd.extend([
+            "-i", stream_url,
+            "-frames:v", "1",
+            "-vf", f"scale={self.video_width}:-2",
+            "-q:v", "2",
+            output_path
+        ])
+
+        return cmd
+
     async def record_clip(self, camera_input: str, duration: int = None) -> dict[str, Any]:
         """Record a video clip from camera."""
         duration = duration or self.video_duration
@@ -456,18 +526,8 @@ class VideoAnalyzer:
             with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False, dir=self.snapshot_dir) as vf:
                 video_path = vf.name
             
-            cmd = [
-                "ffmpeg", "-y", "-rtsp_transport", "tcp",
-                "-i", stream_url,
-                "-t", str(duration),
-                "-vf", f"scale={self.video_width}:-2",
-                "-r", "10",
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-crf", str(self.video_crf),
-                "-an",
-                video_path
-            ]
+            # Build command based on stream type (RTSP vs HLS/HTTP)
+            cmd = self._build_ffmpeg_cmd(stream_url, duration, video_path)
             
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -532,29 +592,9 @@ class VideoAnalyzer:
             with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as ff:
                 frame_path = ff.name
             
-            # Record video
-            video_cmd = [
-                "ffmpeg", "-y", "-rtsp_transport", "tcp",
-                "-i", stream_url,
-                "-t", str(duration),
-                "-vf", f"scale={self.video_width}:-2",
-                "-r", "10",
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-crf", str(self.video_crf),
-                "-an",
-                video_path
-            ]
-            
-            # Extract frame from stream
-            frame_cmd = [
-                "ffmpeg", "-y", "-rtsp_transport", "tcp",
-                "-i", stream_url,
-                "-frames:v", "1",
-                "-vf", f"scale={self.video_width}:-2",
-                "-q:v", "2",
-                frame_path
-            ]
+            # Build commands based on stream type (RTSP vs HLS/HTTP)
+            video_cmd = self._build_ffmpeg_cmd(stream_url, duration, video_path)
+            frame_cmd = self._build_ffmpeg_frame_cmd(stream_url, frame_path)
             
             video_proc = await asyncio.create_subprocess_exec(
                 *video_cmd,
@@ -862,13 +902,13 @@ class VideoAnalyzer:
         """Identify faces from an image file."""
         if not os.path.exists(image_path):
             return {"success": False, "error": f"Image not found: {image_path}"}
-        
+
         try:
             async with aiofiles.open(image_path, 'rb') as f:
                 image_bytes = await f.read()
-            
+
             people = await self._identify_faces(image_bytes)
-            
+
             return {
                 "success": True,
                 "faces_detected": len(people),
@@ -876,49 +916,3 @@ class VideoAnalyzer:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
-
-    async def send_notification(self, analysis_result: dict[str, Any]) -> None:
-        """Send notification with analysis results."""
-        if not self.notify_services:
-            return
-        
-        description = analysis_result.get("description", "Camera checked")
-        friendly_name = analysis_result.get("friendly_name", "Camera")
-        snapshot_url = analysis_result.get("snapshot_url")
-        identified = analysis_result.get("identified_people", [])
-        
-        title = f"📹 {friendly_name}"
-        
-        if identified:
-            names = [p["name"] for p in identified]
-            message = f"{', '.join(names)} detected. {description}"
-        else:
-            message = description
-        
-        for service in self.notify_services:
-            try:
-                service_domain, service_name = service.split(".", 1)
-                
-                data = {
-                    "title": title,
-                    "message": message,
-                }
-                
-                # Add image for mobile notifications
-                if snapshot_url:
-                    if service in self.ios_devices:
-                        data["data"] = {
-                            "attachment": {"url": snapshot_url},
-                            "push": {"sound": "default"},
-                        }
-                        if self.critical_alerts:
-                            data["data"]["push"]["interruption-level"] = "critical"
-                    else:
-                        data["data"] = {"image": snapshot_url}
-                
-                await self.hass.services.async_call(
-                    service_domain, service_name.replace("mobile_app_", ""), data
-                )
-                
-            except Exception as e:
-                _LOGGER.error("Notification error for %s: %s", service, e)
