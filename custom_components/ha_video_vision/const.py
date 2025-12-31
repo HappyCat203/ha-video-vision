@@ -44,7 +44,7 @@ PROVIDER_DEFAULT_MODELS: Final = {
 DEFAULT_PROVIDER: Final = PROVIDER_OPENROUTER
 
 # =============================================================================
-# vLLM CONFIGURATION (for local/custom endpoints)
+# AI CONFIGURATION
 # =============================================================================
 CONF_VLLM_URL: Final = "vllm_url"
 CONF_VLLM_MODEL: Final = "vllm_model"
@@ -54,7 +54,7 @@ CONF_VLLM_TEMPERATURE: Final = "vllm_temperature"
 DEFAULT_VLLM_URL: Final = "http://localhost:1234/v1"
 DEFAULT_VLLM_MODEL: Final = "local-model"
 DEFAULT_VLLM_MAX_TOKENS: Final = 150
-DEFAULT_VLLM_TEMPERATURE: Final = 0.3
+DEFAULT_VLLM_TEMPERATURE: Final = 0.2  # Lower = more deterministic
 
 # =============================================================================
 # FACIAL RECOGNITION CONFIGURATION
@@ -70,7 +70,7 @@ DEFAULT_FACIAL_REC_CONFIDENCE: Final = 50
 # =============================================================================
 # CAMERA CONFIGURATION - AUTO-DISCOVERY
 # =============================================================================
-# NEW: Selected camera entity IDs from auto-discovery
+# Selected camera entity IDs from auto-discovery
 CONF_SELECTED_CAMERAS: Final = "selected_cameras"
 DEFAULT_SELECTED_CAMERAS: Final = []
 
@@ -94,36 +94,65 @@ DEFAULT_RTSP_STREAM_TYPE: Final = "sub"
 DEFAULT_CAMERAS: Final = {}
 
 # =============================================================================
-# VIDEO SETTINGS
+# VIDEO/IMAGE QUALITY PRESETS
+# =============================================================================
+CONF_QUALITY_PRESET: Final = "quality_preset"
+
+QUALITY_PRESET_LOW: Final = "low"
+QUALITY_PRESET_MEDIUM: Final = "medium"
+QUALITY_PRESET_HIGH: Final = "high"
+QUALITY_PRESET_ULTRA: Final = "ultra"
+QUALITY_PRESET_CUSTOM: Final = "custom"
+
+ALL_QUALITY_PRESETS: Final = [
+    QUALITY_PRESET_LOW,
+    QUALITY_PRESET_MEDIUM,
+    QUALITY_PRESET_HIGH,
+    QUALITY_PRESET_ULTRA,
+    QUALITY_PRESET_CUSTOM,
+]
+
+QUALITY_PRESET_NAMES: Final = {
+    QUALITY_PRESET_LOW: "Low (Fast, Small Files)",
+    QUALITY_PRESET_MEDIUM: "Medium (Balanced)",
+    QUALITY_PRESET_HIGH: "High (Better Quality)",
+    QUALITY_PRESET_ULTRA: "Ultra (Best Quality)",
+    QUALITY_PRESET_CUSTOM: "Custom (Manual Settings)",
+}
+
+# Preset configurations: (width, crf, fps)
+QUALITY_PRESET_VALUES: Final = {
+    QUALITY_PRESET_LOW: {"width": 480, "crf": 32, "fps": 8},
+    QUALITY_PRESET_MEDIUM: {"width": 640, "crf": 28, "fps": 10},
+    QUALITY_PRESET_HIGH: {"width": 720, "crf": 23, "fps": 12},
+    QUALITY_PRESET_ULTRA: {"width": 1080, "crf": 18, "fps": 15},
+}
+
+DEFAULT_QUALITY_PRESET: Final = QUALITY_PRESET_MEDIUM
+
+# =============================================================================
+# VIDEO SETTINGS (for custom preset or overrides)
 # =============================================================================
 CONF_VIDEO_DURATION: Final = "video_duration"
 CONF_VIDEO_WIDTH: Final = "video_width"
 CONF_VIDEO_CRF: Final = "video_crf"
+CONF_VIDEO_FPS: Final = "video_fps"
 CONF_FRAME_FOR_FACIAL: Final = "frame_for_facial"
 
 DEFAULT_VIDEO_DURATION: Final = 3
 DEFAULT_VIDEO_WIDTH: Final = 640
 DEFAULT_VIDEO_CRF: Final = 28
+DEFAULT_VIDEO_FPS: Final = 10
 DEFAULT_FRAME_FOR_FACIAL: Final = 30
 
 # =============================================================================
 # SNAPSHOT SETTINGS
 # =============================================================================
 CONF_SNAPSHOT_DIR: Final = "snapshot_dir"
+CONF_SNAPSHOT_QUALITY: Final = "snapshot_quality"
+
 DEFAULT_SNAPSHOT_DIR: Final = "/media/ha_video_vision"
-
-# =============================================================================
-# NOTIFICATION SETTINGS
-# =============================================================================
-CONF_NOTIFY_SERVICES: Final = "notify_services"
-CONF_IOS_DEVICES: Final = "ios_devices"
-CONF_COOLDOWN_SECONDS: Final = "cooldown_seconds"
-CONF_CRITICAL_ALERTS: Final = "critical_alerts"
-
-DEFAULT_NOTIFY_SERVICES: Final = []
-DEFAULT_IOS_DEVICES: Final = []
-DEFAULT_COOLDOWN_SECONDS: Final = 120
-DEFAULT_CRITICAL_ALERTS: Final = False
+DEFAULT_SNAPSHOT_QUALITY: Final = 85  # JPEG quality 1-100
 
 # =============================================================================
 # SERVICE NAMES
