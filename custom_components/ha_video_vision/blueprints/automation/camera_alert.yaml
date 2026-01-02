@@ -78,6 +78,17 @@ blueprint:
       selector:
         boolean:
 
+    capture_delay:
+      name: "Capture Delay (seconds)"
+      description: "Wait time before capturing. Increase for cloud cameras (Ring, Nest) that need time to process new video. Default 1s works for local cameras, use 3-5s for cloud cameras."
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          unit_of_measurement: "s"
+
 mode: single
 max_exceeded: silent
 
@@ -89,6 +100,7 @@ variables:
   user_prompt: !input custom_prompt
   time_start: !input notify_start
   time_end: !input notify_end
+  delay_seconds: !input capture_delay
   # Default prompt - factual and deterministic
   default_prompt: "Briefly describe what you see. Only state what is clearly visible. Do not speculate. If a person is visible, describe their appearance and actions. 2-3 sentences max."
   # Build service names from device IDs
@@ -113,9 +125,9 @@ condition:
     before: !input notify_end
 
 action:
-  # Wait for camera to capture
+  # Wait for camera to capture (increase for cloud cameras like Ring/Nest)
   - delay:
-      seconds: 1
+      seconds: "{{ delay_seconds }}"
 
   # Analyze camera with prompt
   - service: ha_video_vision.analyze_camera
