@@ -115,7 +115,7 @@ CONF_CLOUD_FALLBACK_MODEL: Final = "cloud_fallback_model"
 DEFAULT_GAMING_MODE_ENTITY: Final = "input_boolean.gaming_mode"
 DEFAULT_CLOUD_FALLBACK_PROVIDER: Final = PROVIDER_OPENROUTER
 DEFAULT_CLOUD_FALLBACK_API_KEY: Final = ""
-DEFAULT_CLOUD_FALLBACK_MODEL: Final = "openai/gpt-4o-mini"
+DEFAULT_CLOUD_FALLBACK_MODEL: Final = "nvidia/nemotron-nano:free"
 
 # Local providers that should switch to cloud when gaming
 LOCAL_PROVIDERS: Final = [PROVIDER_LM_STUDIO, PROVIDER_OLLAMA]
