@@ -816,12 +816,11 @@ class VideoAnalyzer:
         
         # Record video and get frames
         video_bytes, frame_bytes, facial_frame_bytes = await self._record_video_and_frames(entity_id, duration)
-        
-        # Run facial recognition if enabled
-        identified_people = []
-        if facial_frame_bytes and self.facial_rec_enabled:
-            identified_people = await self._identify_faces(facial_frame_bytes)
-        
+
+        # NOTE: Facial recognition is NOT run during analyze_camera to prevent
+        # AI hallucination issues. Use the separate identify_faces service if needed.
+        # The identify_faces service can be called independently with a snapshot.
+
         # Prepare prompt
         if user_query:
             prompt = user_query
@@ -832,11 +831,6 @@ class VideoAnalyzer:
                 "Be concise (2-3 sentences)."
             )
         
-        # NOTE: We intentionally do NOT inject facial recognition names into the prompt.
-        # Telling the AI "these people are in frame" causes it to hallucinate/confirm
-        # their presence even when they're not visible. Instead, facial recognition
-        # results are returned separately in the response for the caller to use.
-
         # Send to AI provider (returns description and effective provider used)
         description, provider_used = await self._analyze_with_provider(video_bytes, frame_bytes, prompt)
 
@@ -856,9 +850,10 @@ class VideoAnalyzer:
             except Exception as e:
                 _LOGGER.error("Failed to save snapshot: %s", e)
 
-        # Safely check for person-related words in description
+        # Check for person-related words in AI description only
+        # (facial recognition is handled separately via identify_faces service)
         description_text = description or ""
-        person_detected = bool(identified_people) or any(
+        person_detected = any(
             word in description_text.lower()
             for word in ["person", "people", "someone", "man", "woman", "child"]
         )
@@ -871,7 +866,6 @@ class VideoAnalyzer:
             "camera": entity_id,
             "friendly_name": friendly_name,
             "description": description,
-            "identified_people": identified_people,
             "person_detected": person_detected,
             "snapshot_path": snapshot_path,
             "snapshot_url": f"/media/local/ha_video_vision/{safe_name}_latest.jpg" if snapshot_path else None,
