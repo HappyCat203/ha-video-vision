@@ -33,7 +33,8 @@
     "step": {
       "init": {
         "menu_options": {
-          "provider": "AI Provider Settings",
+          "manage_providers": "Select Default Provider",
+          "add_provider": "Add New Provider",
           "cameras": "Select Cameras",
           "voice_aliases": "Voice Aliases",
           "facial_rec": "Facial Recognition",
@@ -41,13 +42,28 @@
           "ai_settings": "AI Settings"
         }
       },
-      "provider": {
-        "title": "AI Provider Settings",
+      "manage_providers": {
+        "title": "Select Default Provider",
+        "description": "You have {provider_count} provider(s) configured: {configured_list}\n\nSelect which provider to use by default for analysis.",
         "data": {
-          "provider": "AI Provider",
+          "default_provider": "Default Provider"
+        }
+      },
+      "add_provider": {
+        "title": "Add AI Provider",
+        "description": "Select a provider to add or reconfigure. Providers marked with checkmark are already configured.",
+        "data": {
+          "provider": "AI Provider"
+        }
+      },
+      "provider_credentials": {
+        "title": "Configure {provider_name}",
+        "description": "Enter your API credentials. Default model: {default_model}",
+        "data": {
           "vllm_url": "API Base URL",
           "api_key": "API Key",
-          "vllm_model": "Model Name"
+          "vllm_model": "Model Name",
+          "set_as_default": "Set as default provider"
         }
       },
       "cameras": {
