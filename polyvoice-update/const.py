@@ -104,6 +104,10 @@ DEFAULT_TOP_P: Final = 0.95
 CONF_REASONING_EFFORT: Final = "reasoning_effort"
 DEFAULT_REASONING_EFFORT: Final = "medium"
 
+# OpenAI Responses API (for streaming/realtime)
+CONF_USE_RESPONSES_API: Final = "use_responses_api"
+DEFAULT_USE_RESPONSES_API: Final = False
+
 # =============================================================================
 # GAMING MODE (Local AI Fallback to Cloud)
 # =============================================================================
