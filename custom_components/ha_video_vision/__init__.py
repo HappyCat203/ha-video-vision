@@ -644,7 +644,12 @@ class VideoAnalyzer:
     ) -> dict[str, Any]:
         """Analyze camera using video and optional facial recognition."""
         duration = duration or self.video_duration
-        
+
+        _LOGGER.info(
+            "Camera analysis requested - Input: '%s', Provider: %s, Model: %s",
+            camera_input, self.provider, self.vllm_model
+        )
+
         entity_id = self._find_camera_entity(camera_input)
         if not entity_id:
             available = ", ".join(self.selected_cameras) if self.selected_cameras else "None configured"
@@ -681,7 +686,12 @@ class VideoAnalyzer:
         
         # Send to AI provider
         description = await self._analyze_with_provider(video_bytes, frame_bytes, prompt)
-        
+
+        _LOGGER.info(
+            "Analysis complete for %s (%s) - Response length: %d chars",
+            friendly_name, entity_id, len(description) if description else 0
+        )
+
         # Save snapshot
         snapshot_path = None
         if frame_bytes:
@@ -714,7 +724,13 @@ class VideoAnalyzer:
         self, video_bytes: bytes | None, frame_bytes: bytes | None, prompt: str
     ) -> str:
         """Send video/image to the configured AI provider."""
-        
+        media_type = "video" if video_bytes else ("image" if frame_bytes else "none")
+        _LOGGER.info(
+            "Sending %s to AI - Provider: %s, Model: %s, Base URL: %s",
+            media_type, self.provider, self.vllm_model,
+            self.base_url if self.provider == PROVIDER_LOCAL else "default"
+        )
+
         if self.provider == PROVIDER_GOOGLE:
             return await self._analyze_google(video_bytes, frame_bytes, prompt)
         elif self.provider == PROVIDER_OPENROUTER:
