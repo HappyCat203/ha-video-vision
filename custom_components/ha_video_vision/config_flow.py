@@ -325,18 +325,18 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
         """Manage the options."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=[
-                "default_provider",
-                "gaming_mode",
-                "configure_google",
-                "configure_openrouter",
-                "configure_local",
-                "cameras",
-                "voice_aliases",
-                "facial_rec",
-                "video_quality",
-                "ai_settings",
-            ],
+            menu_options={
+                "default_provider": "Select Default Provider",
+                "gaming_mode": "Gaming Mode",
+                "configure_google": "Configure Google Gemini",
+                "configure_openrouter": "Configure OpenRouter",
+                "configure_local": "Configure Local vLLM",
+                "cameras": "Select Cameras",
+                "voice_aliases": "Voice Aliases",
+                "facial_rec": "Facial Recognition",
+                "video_quality": "Video Quality",
+                "ai_settings": "AI Settings",
+            },
         )
 
     async def async_step_default_provider(
