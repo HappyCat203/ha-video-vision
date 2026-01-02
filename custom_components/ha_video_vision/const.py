@@ -12,6 +12,9 @@ CONF_API_KEY: Final = "api_key"
 # Per-provider credential storage (for multi-provider switching)
 CONF_PROVIDER_CONFIGS: Final = "provider_configs"
 
+# Default provider selection (from configured providers)
+CONF_DEFAULT_PROVIDER: Final = "default_provider"
+
 # Provider choices - VIDEO ONLY (no image-only providers)
 PROVIDER_LOCAL: Final = "local"
 PROVIDER_GOOGLE: Final = "google"

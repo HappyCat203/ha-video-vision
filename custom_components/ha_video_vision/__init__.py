@@ -26,6 +26,7 @@ from .const import (
     CONF_PROVIDER,
     CONF_API_KEY,
     CONF_PROVIDER_CONFIGS,
+    CONF_DEFAULT_PROVIDER,
     PROVIDER_LOCAL,
     PROVIDER_GOOGLE,
     PROVIDER_OPENROUTER,
@@ -284,17 +285,20 @@ class VideoAnalyzer:
 
     def update_config(self, config: dict[str, Any]) -> None:
         """Update configuration."""
-        # Provider settings
-        self.provider = config.get(CONF_PROVIDER, DEFAULT_PROVIDER)
+        # Provider settings - use CONF_DEFAULT_PROVIDER first, fallback to CONF_PROVIDER for legacy
+        self.provider = config.get(CONF_DEFAULT_PROVIDER, config.get(CONF_PROVIDER, DEFAULT_PROVIDER))
         self.provider_configs = config.get(CONF_PROVIDER_CONFIGS, {})
 
+        # Get config for the active/default provider
         active_config = self.provider_configs.get(self.provider, {})
 
         if active_config:
+            # Use provider-specific config from provider_configs
             self.api_key = active_config.get("api_key", "")
             self.vllm_model = active_config.get("model", PROVIDER_DEFAULT_MODELS.get(self.provider, ""))
             self.base_url = active_config.get("base_url", PROVIDER_BASE_URLS.get(self.provider, ""))
         else:
+            # Fall back to top-level config (legacy/migration support)
             self.api_key = config.get(CONF_API_KEY, "")
             self.vllm_model = config.get(CONF_VLLM_MODEL, PROVIDER_DEFAULT_MODELS.get(self.provider, DEFAULT_VLLM_MODEL))
 

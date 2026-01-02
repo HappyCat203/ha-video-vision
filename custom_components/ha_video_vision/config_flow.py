@@ -19,6 +19,8 @@ from .const import (
     # Provider
     CONF_PROVIDER,
     CONF_API_KEY,
+    CONF_PROVIDER_CONFIGS,
+    CONF_DEFAULT_PROVIDER,
     PROVIDER_LOCAL,
     PROVIDER_GOOGLE,
     PROVIDER_OPENROUTER,
@@ -166,6 +168,18 @@ class VideoVisionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._data[CONF_SELECTED_CAMERAS] = user_input.get(CONF_SELECTED_CAMERAS, [])
 
+            # Build provider_configs structure for multi-provider support
+            provider = self._data.get(CONF_PROVIDER, DEFAULT_PROVIDER)
+            provider_config = {
+                "api_key": self._data.get(CONF_API_KEY, ""),
+                "model": self._data.get(CONF_VLLM_MODEL, PROVIDER_DEFAULT_MODELS.get(provider, "")),
+            }
+            if provider == PROVIDER_LOCAL:
+                provider_config["base_url"] = self._data.get(CONF_VLLM_URL, DEFAULT_VLLM_URL)
+
+            self._data[CONF_PROVIDER_CONFIGS] = {provider: provider_config}
+            self._data[CONF_DEFAULT_PROVIDER] = provider
+
             # Create the config entry
             return self.async_create_entry(
                 title="HA Video Vision",
@@ -242,7 +256,8 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_menu(
             step_id="init",
             menu_options=[
-                "provider",
+                "manage_providers",
+                "add_provider",
                 "cameras",
                 "voice_aliases",
                 "facial_rec",
@@ -251,55 +266,178 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
             ],
         )
 
-    async def async_step_provider(
+    async def async_step_manage_providers(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle provider settings."""
-        errors = {}
+        """Manage configured providers and select default."""
         current = {**self._entry.data, **self._entry.options}
+        provider_configs = current.get(CONF_PROVIDER_CONFIGS, {})
+        current_default = current.get(CONF_DEFAULT_PROVIDER, current.get(CONF_PROVIDER, DEFAULT_PROVIDER))
+
+        # If no providers configured yet, migrate from old format
+        if not provider_configs:
+            old_provider = current.get(CONF_PROVIDER, DEFAULT_PROVIDER)
+            provider_configs = {
+                old_provider: {
+                    "api_key": current.get(CONF_API_KEY, ""),
+                    "model": current.get(CONF_VLLM_MODEL, PROVIDER_DEFAULT_MODELS.get(old_provider, "")),
+                    "base_url": current.get(CONF_VLLM_URL, DEFAULT_VLLM_URL) if old_provider == PROVIDER_LOCAL else "",
+                }
+            }
+            current_default = old_provider
 
         if user_input is not None:
-            provider = user_input.get(CONF_PROVIDER, current.get(CONF_PROVIDER))
-            valid = await self._test_provider_connection(provider, user_input)
+            new_default = user_input.get(CONF_DEFAULT_PROVIDER, current_default)
+            new_options = {**self._entry.options}
+            new_options[CONF_DEFAULT_PROVIDER] = new_default
+            new_options[CONF_PROVIDER] = new_default  # Keep legacy field in sync
+            new_options[CONF_PROVIDER_CONFIGS] = provider_configs
+
+            # Update legacy fields from the new default provider config
+            if new_default in provider_configs:
+                config = provider_configs[new_default]
+                new_options[CONF_API_KEY] = config.get("api_key", "")
+                new_options[CONF_VLLM_MODEL] = config.get("model", PROVIDER_DEFAULT_MODELS.get(new_default, ""))
+                if new_default == PROVIDER_LOCAL:
+                    new_options[CONF_VLLM_URL] = config.get("base_url", DEFAULT_VLLM_URL)
+
+            return self.async_create_entry(title="", data=new_options)
+
+        # Build list of configured providers for the dropdown
+        configured_providers = []
+        for provider_key in provider_configs:
+            if provider_key in PROVIDER_NAMES:
+                configured_providers.append(
+                    selector.SelectOptionDict(
+                        value=provider_key,
+                        label=PROVIDER_NAMES[provider_key]
+                    )
+                )
+
+        # If no providers configured, show a message
+        if not configured_providers:
+            configured_providers.append(
+                selector.SelectOptionDict(
+                    value=DEFAULT_PROVIDER,
+                    label=f"{PROVIDER_NAMES[DEFAULT_PROVIDER]} (not configured)"
+                )
+            )
+
+        return self.async_show_form(
+            step_id="manage_providers",
+            data_schema=vol.Schema({
+                vol.Required(CONF_DEFAULT_PROVIDER, default=current_default): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=configured_providers,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }),
+            description_placeholders={
+                "provider_count": str(len(provider_configs)),
+                "configured_list": ", ".join(PROVIDER_NAMES.get(p, p) for p in provider_configs.keys()),
+            },
+        )
+
+    async def async_step_add_provider(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Add a new provider."""
+        if user_input is not None:
+            # Store selected provider and move to credentials step
+            self._adding_provider = user_input.get(CONF_PROVIDER, DEFAULT_PROVIDER)
+            return await self.async_step_provider_credentials()
+
+        current = {**self._entry.data, **self._entry.options}
+        provider_configs = current.get(CONF_PROVIDER_CONFIGS, {})
+
+        # Show all providers, indicating which are already configured
+        provider_options = []
+        for p in ALL_PROVIDERS:
+            label = PROVIDER_NAMES[p]
+            if p in provider_configs:
+                label += " ✓ (configured)"
+            provider_options.append(selector.SelectOptionDict(value=p, label=label))
+
+        return self.async_show_form(
+            step_id="add_provider",
+            data_schema=vol.Schema({
+                vol.Required(CONF_PROVIDER, default=DEFAULT_PROVIDER): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=provider_options,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }),
+        )
+
+    async def async_step_provider_credentials(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure credentials for the selected provider."""
+        errors = {}
+        provider = getattr(self, '_adding_provider', DEFAULT_PROVIDER)
+        current = {**self._entry.data, **self._entry.options}
+        provider_configs = current.get(CONF_PROVIDER_CONFIGS, {})
+        existing_config = provider_configs.get(provider, {})
+
+        if user_input is not None:
+            # Test connection
+            test_config = {**user_input}
+            if provider != PROVIDER_LOCAL:
+                test_config[CONF_API_KEY] = user_input.get(CONF_API_KEY, "")
+            valid = await self._test_provider_connection(provider, test_config)
+
             if valid:
-                new_options = {**self._entry.options, **user_input}
+                # Build provider config
+                new_provider_config = {
+                    "api_key": user_input.get(CONF_API_KEY, ""),
+                    "model": user_input.get(CONF_VLLM_MODEL, PROVIDER_DEFAULT_MODELS.get(provider, "")),
+                }
+                if provider == PROVIDER_LOCAL:
+                    new_provider_config["base_url"] = user_input.get(CONF_VLLM_URL, DEFAULT_VLLM_URL)
+
+                # Update provider_configs
+                new_provider_configs = {**provider_configs, provider: new_provider_config}
+
+                new_options = {**self._entry.options}
+                new_options[CONF_PROVIDER_CONFIGS] = new_provider_configs
+
+                # If this is the first provider or user wants it as default
+                if len(new_provider_configs) == 1 or user_input.get("set_as_default", False):
+                    new_options[CONF_DEFAULT_PROVIDER] = provider
+                    new_options[CONF_PROVIDER] = provider
+                    new_options[CONF_API_KEY] = new_provider_config.get("api_key", "")
+                    new_options[CONF_VLLM_MODEL] = new_provider_config.get("model", "")
+                    if provider == PROVIDER_LOCAL:
+                        new_options[CONF_VLLM_URL] = new_provider_config.get("base_url", DEFAULT_VLLM_URL)
+
                 return self.async_create_entry(title="", data=new_options)
             else:
                 errors["base"] = "cannot_connect"
 
-        provider = current.get(CONF_PROVIDER, DEFAULT_PROVIDER)
-        provider_options = [
-            selector.SelectOptionDict(value=p, label=PROVIDER_NAMES[p])
-            for p in ALL_PROVIDERS
-        ]
-
+        # Build schema based on provider type
         if provider == PROVIDER_LOCAL:
             schema = vol.Schema({
-                vol.Required(CONF_PROVIDER, default=provider): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=provider_options,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Required(CONF_VLLM_URL, default=current.get(CONF_VLLM_URL, DEFAULT_VLLM_URL)): str,
-                vol.Required(CONF_VLLM_MODEL, default=current.get(CONF_VLLM_MODEL, DEFAULT_VLLM_MODEL)): str,
+                vol.Required(CONF_VLLM_URL, default=existing_config.get("base_url", DEFAULT_VLLM_URL)): str,
+                vol.Required(CONF_VLLM_MODEL, default=existing_config.get("model", PROVIDER_DEFAULT_MODELS[provider])): str,
+                vol.Optional("set_as_default", default=len(provider_configs) == 0): bool,
             })
         else:
             schema = vol.Schema({
-                vol.Required(CONF_PROVIDER, default=provider): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=provider_options,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Required(CONF_API_KEY, default=current.get(CONF_API_KEY, "")): str,
-                vol.Optional(CONF_VLLM_MODEL, default=current.get(CONF_VLLM_MODEL, PROVIDER_DEFAULT_MODELS.get(provider, ""))): str,
+                vol.Required(CONF_API_KEY, default=existing_config.get("api_key", "")): str,
+                vol.Optional(CONF_VLLM_MODEL, default=existing_config.get("model", PROVIDER_DEFAULT_MODELS[provider])): str,
+                vol.Optional("set_as_default", default=len(provider_configs) == 0): bool,
             })
 
         return self.async_show_form(
-            step_id="provider",
+            step_id="provider_credentials",
             data_schema=schema,
             errors=errors,
+            description_placeholders={
+                "provider_name": PROVIDER_NAMES[provider],
+                "default_model": PROVIDER_DEFAULT_MODELS[provider],
+            },
         )
 
     async def _test_provider_connection(
