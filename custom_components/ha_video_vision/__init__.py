@@ -520,14 +520,71 @@ class VideoAnalyzer:
         
         return None
 
-    async def _get_camera_snapshot(self, entity_id: str) -> bytes | None:
-        """Get camera snapshot using HA's camera component."""
-        try:
-            image = await async_get_image(self.hass, entity_id)
-            return image.content
-        except Exception as e:
-            _LOGGER.error("Failed to get snapshot from %s: %s", entity_id, e)
-            return None
+    async def _get_camera_snapshot(self, entity_id: str, retries: int = 3, delay: float = 1.0) -> bytes | None:
+        """Get camera snapshot using HA's camera component with retry logic.
+
+        For cloud-based cameras (Ring, Nest, etc.), the first snapshot may be stale.
+        Retry with delays to allow the camera to process new events.
+        """
+        last_image = None
+        last_error = None
+
+        for attempt in range(retries):
+            try:
+                if attempt > 0:
+                    _LOGGER.debug(
+                        "Snapshot retry %d/%d for %s (waiting %.1fs)",
+                        attempt + 1, retries, entity_id, delay
+                    )
+                    await asyncio.sleep(delay)
+                    # Increase delay for next attempt (exponential backoff)
+                    delay = min(delay * 1.5, 5.0)
+
+                image = await async_get_image(self.hass, entity_id)
+                if image and image.content:
+                    # Got a valid image
+                    if last_image and image.content == last_image:
+                        # Same image as before - camera may be returning cached/stale image
+                        _LOGGER.debug(
+                            "Snapshot from %s unchanged on attempt %d, retrying...",
+                            entity_id, attempt + 1
+                        )
+                        continue
+
+                    _LOGGER.debug(
+                        "Got snapshot from %s on attempt %d (%d bytes)",
+                        entity_id, attempt + 1, len(image.content)
+                    )
+                    return image.content
+
+                last_image = image.content if image else None
+
+            except Exception as e:
+                last_error = e
+                _LOGGER.debug(
+                    "Snapshot attempt %d failed for %s: %s",
+                    attempt + 1, entity_id, e
+                )
+
+        # All retries exhausted
+        if last_error:
+            _LOGGER.warning(
+                "Failed to get fresh snapshot from %s after %d attempts: %s",
+                entity_id, retries, last_error
+            )
+        elif last_image:
+            _LOGGER.debug(
+                "Returning possibly stale snapshot from %s (unchanged across retries)",
+                entity_id
+            )
+            return last_image
+        else:
+            _LOGGER.warning(
+                "No snapshot available from %s after %d attempts",
+                entity_id, retries
+            )
+
+        return last_image
 
     async def _get_stream_url(self, entity_id: str) -> str | None:
         """Get RTSP/stream URL from camera entity."""
@@ -655,19 +712,27 @@ class VideoAnalyzer:
     async def _record_video_and_frames(self, entity_id: str, duration: int) -> tuple[bytes | None, bytes | None, bytes | None]:
         """Record video and extract frames from camera entity."""
         stream_url = await self._get_stream_url(entity_id)
-        
+
         video_bytes = None
         frame_bytes = None
         facial_frame_bytes = None
-        
-        # Always try to get a snapshot for facial recognition (high quality)
-        facial_frame_bytes = await self._get_camera_snapshot(entity_id)
-        
+
         if not stream_url:
-            # No stream URL - use snapshot only
-            _LOGGER.info("No stream URL for %s, using snapshot only", entity_id)
+            # No stream URL (cloud camera like Ring/Nest) - use snapshot only
+            # Use more retries and longer delays for cloud cameras
+            _LOGGER.warning(
+                "No stream URL for %s - using snapshot mode (cloud camera). "
+                "If images are stale, increase 'Capture Delay' in the blueprint.",
+                entity_id
+            )
+            facial_frame_bytes = await self._get_camera_snapshot(
+                entity_id, retries=4, delay=1.5
+            )
             frame_bytes = facial_frame_bytes
             return video_bytes, frame_bytes, facial_frame_bytes
+
+        # Has stream URL - get snapshot first for facial recognition
+        facial_frame_bytes = await self._get_camera_snapshot(entity_id)
         
         video_path = None
         frame_path = None
