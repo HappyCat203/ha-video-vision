@@ -100,6 +100,10 @@ DEFAULT_TEMPERATURE: Final = 0.7
 DEFAULT_MAX_TOKENS: Final = 2000
 DEFAULT_TOP_P: Final = 0.95
 
+# Reasoning effort (for o1/o3 models)
+CONF_REASONING_EFFORT: Final = "reasoning_effort"
+DEFAULT_REASONING_EFFORT: Final = "medium"
+
 # =============================================================================
 # GAMING MODE (Local AI Fallback to Cloud)
 # =============================================================================
