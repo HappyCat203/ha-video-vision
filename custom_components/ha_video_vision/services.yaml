@@ -52,3 +52,34 @@ record_clip:
           step: 1
           unit_of_measurement: seconds
 
+identify_faces:
+  name: Identify Faces
+  description: Identify faces in an image using the Facial Recognition add-on (github.com/LosCV29/ha-addons).
+  fields:
+    image_path:
+      name: Image Path
+      description: Path to the image file (e.g., from analyze_camera snapshot_path)
+      required: true
+      example: "/media/ha_video_vision/driveway_latest.jpg"
+      selector:
+        text:
+    server_url:
+      name: Server URL
+      description: URL of the facial recognition add-on server
+      required: true
+      default: "http://homeassistant.local:8100"
+      example: "http://homeassistant.local:8100"
+      selector:
+        text:
+    min_confidence:
+      name: Minimum Confidence
+      description: Minimum confidence percentage to include in results
+      required: false
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 5
+          unit_of_measurement: "%"
+

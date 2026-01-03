@@ -108,6 +108,7 @@ DEFAULT_SNAPSHOT_QUALITY: Final = 85  # JPEG quality 1-100
 # =============================================================================
 SERVICE_ANALYZE_CAMERA: Final = "analyze_camera"
 SERVICE_RECORD_CLIP: Final = "record_clip"
+SERVICE_IDENTIFY_FACES: Final = "identify_faces"
 
 # =============================================================================
 # ATTRIBUTES
