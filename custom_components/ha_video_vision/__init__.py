@@ -60,6 +60,7 @@ from .const import (
     # Services
     SERVICE_ANALYZE_CAMERA,
     SERVICE_RECORD_CLIP,
+    SERVICE_IDENTIFY_FACES,
     # Attributes
     ATTR_CAMERA,
     ATTR_DURATION,
@@ -144,6 +145,14 @@ SERVICE_RECORD_SCHEMA = vol.Schema(
     }
 )
 
+SERVICE_IDENTIFY_FACES_SCHEMA = vol.Schema(
+    {
+        vol.Required("image_path"): cv.string,
+        vol.Required("server_url"): cv.string,
+        vol.Optional("min_confidence", default=50): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+    }
+)
+
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the HA Video Vision component."""
@@ -207,6 +216,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         return await analyzer.record_clip(camera, duration)
 
+    async def handle_identify_faces(call: ServiceCall) -> dict[str, Any]:
+        """Handle identify_faces service call for facial recognition add-on."""
+        image_path = call.data["image_path"]
+        server_url = call.data["server_url"]
+        min_confidence = call.data.get("min_confidence", 50)
+
+        return await analyzer.identify_faces(image_path, server_url, min_confidence)
+
     # Register services with response support
     hass.services.async_register(
         DOMAIN,
@@ -221,6 +238,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         SERVICE_RECORD_CLIP,
         handle_record_clip,
         schema=SERVICE_RECORD_SCHEMA,
+        supports_response=True,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_IDENTIFY_FACES,
+        handle_identify_faces,
+        schema=SERVICE_IDENTIFY_FACES_SCHEMA,
         supports_response=True,
     )
 
@@ -244,6 +269,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Remove services
     hass.services.async_remove(DOMAIN, SERVICE_ANALYZE_CAMERA)
     hass.services.async_remove(DOMAIN, SERVICE_RECORD_CLIP)
+    hass.services.async_remove(DOMAIN, SERVICE_IDENTIFY_FACES)
 
     hass.data[DOMAIN].pop(entry.entry_id, None)
     return True
@@ -1026,7 +1052,86 @@ class VideoAnalyzer:
                         error = await response.text()
                         _LOGGER.error("Local vLLM error: %s", error[:500])
                         return f"Analysis failed: {response.status}"
-                        
+
         except Exception as e:
             _LOGGER.error("Local vLLM error: %s", e)
             return f"Analysis error: {str(e)}"
+
+    async def identify_faces(
+        self, image_path: str, server_url: str, min_confidence: int = 50
+    ) -> dict[str, Any]:
+        """Identify faces using the facial recognition add-on.
+
+        Args:
+            image_path: Path to image file (e.g., from analyze_camera snapshot)
+            server_url: URL of facial recognition server (e.g., http://homeassistant.local:8100)
+            min_confidence: Minimum confidence % to include in results
+
+        Returns:
+            Dict with faces_detected, identified_people, and summary
+        """
+        try:
+            # Read image file
+            if not os.path.exists(image_path):
+                return {
+                    "success": False,
+                    "error": f"Image not found: {image_path}",
+                    "faces_detected": 0,
+                    "identified_people": [],
+                    "summary": "",
+                }
+
+            async with aiofiles.open(image_path, 'rb') as f:
+                image_bytes = await f.read()
+
+            image_b64 = base64.b64encode(image_bytes).decode()
+            url = f"{server_url.rstrip('/')}/identify"
+
+            async with asyncio.timeout(30):
+                async with self._session.post(url, json={"image_base64": image_b64}) as response:
+                    if response.status == 200:
+                        result = await response.json()
+
+                        # Filter by confidence threshold
+                        identified_people = [
+                            p for p in result.get("people", [])
+                            if p.get("name") != "Unknown" and p.get("confidence", 0) >= min_confidence
+                        ]
+
+                        return {
+                            "success": True,
+                            "faces_detected": result.get("faces_detected", 0),
+                            "identified_people": identified_people,
+                            "summary": ", ".join([
+                                f"{p['name']} ({p['confidence']}%)"
+                                for p in identified_people
+                            ]) if identified_people else "No known faces",
+                        }
+                    else:
+                        error = await response.text()
+                        _LOGGER.warning("Facial recognition error (%d): %s", response.status, error[:200])
+                        return {
+                            "success": False,
+                            "error": f"Server error: {response.status}",
+                            "faces_detected": 0,
+                            "identified_people": [],
+                            "summary": "",
+                        }
+
+        except asyncio.TimeoutError:
+            return {
+                "success": False,
+                "error": "Request timed out",
+                "faces_detected": 0,
+                "identified_people": [],
+                "summary": "",
+            }
+        except Exception as e:
+            _LOGGER.warning("Facial recognition error: %s", e)
+            return {
+                "success": False,
+                "error": str(e),
+                "faces_detected": 0,
+                "identified_people": [],
+                "summary": "",
+            }
