@@ -18,42 +18,28 @@ CONF_DEFAULT_PROVIDER: Final = "default_provider"
 # Provider choices - VIDEO ONLY (no image-only providers)
 PROVIDER_LOCAL: Final = "local"
 PROVIDER_GOOGLE: Final = "google"
-PROVIDER_OPENROUTER: Final = "openrouter"
 
 ALL_PROVIDERS: Final = [
     PROVIDER_LOCAL,
     PROVIDER_GOOGLE,
-    PROVIDER_OPENROUTER,
 ]
 
 PROVIDER_NAMES: Final = {
     PROVIDER_LOCAL: "Local vLLM (Video-Capable)",
-    PROVIDER_GOOGLE: "Google Gemini",
-    PROVIDER_OPENROUTER: "OpenRouter (Nemotron - FREE)",
+    PROVIDER_GOOGLE: "Google Gemini (FREE - Video Support)",
 }
 
 PROVIDER_BASE_URLS: Final = {
     PROVIDER_LOCAL: "http://localhost:1234/v1",
     PROVIDER_GOOGLE: "https://generativelanguage.googleapis.com/v1beta",
-    PROVIDER_OPENROUTER: "https://openrouter.ai/api/v1",
 }
 
 PROVIDER_DEFAULT_MODELS: Final = {
     PROVIDER_LOCAL: "local-model",
     PROVIDER_GOOGLE: "gemini-2.0-flash",
-    PROVIDER_OPENROUTER: "nvidia/nemotron-nano-12b-v2-vl:free",
 }
 
-DEFAULT_PROVIDER: Final = PROVIDER_OPENROUTER
-
-# =============================================================================
-# GAMING MODE (Local AI Fallback)
-# =============================================================================
-CONF_GAMING_MODE_ENTITY: Final = "gaming_mode_entity"
-CONF_CLOUD_FALLBACK_PROVIDER: Final = "cloud_fallback_provider"
-
-DEFAULT_GAMING_MODE_ENTITY: Final = "input_boolean.gaming_mode"
-DEFAULT_CLOUD_FALLBACK_PROVIDER: Final = PROVIDER_OPENROUTER
+DEFAULT_PROVIDER: Final = PROVIDER_GOOGLE
 
 # =============================================================================
 # AI CONFIGURATION
