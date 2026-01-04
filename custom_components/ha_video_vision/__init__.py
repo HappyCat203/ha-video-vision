@@ -67,14 +67,20 @@ from .const import (
     CONF_FACIAL_RECOGNITION_CONFIDENCE,
     DEFAULT_FACIAL_RECOGNITION_URL,
     DEFAULT_FACIAL_RECOGNITION_CONFIDENCE,
+    # Timeline
+    CONF_TIMELINE_ENABLED,
     # Attributes
     ATTR_CAMERA,
     ATTR_DURATION,
     ATTR_USER_QUERY,
     ATTR_FACIAL_RECOGNITION,
+    ATTR_REMEMBER,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Platforms to set up
+PLATFORMS = ["calendar"]
 
 # Bundled blueprints
 BLUEPRINTS = [
@@ -143,6 +149,7 @@ SERVICE_ANALYZE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_DURATION, default=3): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
         vol.Optional(ATTR_USER_QUERY, default=""): cv.string,
         vol.Optional(ATTR_FACIAL_RECOGNITION, default=False): cv.boolean,
+        vol.Optional(ATTR_REMEMBER, default=False): cv.boolean,
     }
 )
 
@@ -215,6 +222,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         duration = call.data.get(ATTR_DURATION, 3)
         user_query = call.data.get(ATTR_USER_QUERY, "")
         do_facial_recognition = call.data.get(ATTR_FACIAL_RECOGNITION, False)
+        do_remember = call.data.get(ATTR_REMEMBER, False)
 
         result = await analyzer.analyze_camera(camera, duration, user_query)
 
@@ -235,6 +243,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Add face results to the response
             result["face_recognition"] = face_result
             _LOGGER.warning("Face recognition result: %s", face_result)
+
+        # Save to timeline if remember is enabled
+        if do_remember and result.get("success"):
+            timeline = hass.data[DOMAIN][entry.entry_id].get("timeline")
+            if timeline:
+                await timeline.async_add_event(
+                    camera_entity=result.get("camera", ""),
+                    camera_name=result.get("friendly_name", ""),
+                    description=result.get("description", ""),
+                    snapshot_path=result.get("snapshot_path"),
+                    person_detected=result.get("person_detected", False),
+                    provider=result.get("provider_used"),
+                )
+                _LOGGER.debug("Saved analysis to timeline for %s", result.get("friendly_name"))
 
         return result
 
@@ -292,7 +314,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Listen for option updates
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    _LOGGER.info("HA Video Vision (Auto-Discovery) setup complete with %d cameras", 
+    # Set up calendar platform for timeline (if enabled)
+    if config.get(CONF_TIMELINE_ENABLED, True):
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    _LOGGER.info("HA Video Vision (Auto-Discovery) setup complete with %d cameras",
                  len(config.get(CONF_SELECTED_CAMERAS, [])))
     return True
 
@@ -306,6 +332,11 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    # Unload platforms if they were set up
+    config = {**entry.data, **entry.options}
+    if config.get(CONF_TIMELINE_ENABLED, True):
+        await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
     # Remove services
     hass.services.async_remove(DOMAIN, SERVICE_ANALYZE_CAMERA)
     hass.services.async_remove(DOMAIN, SERVICE_RECORD_CLIP)

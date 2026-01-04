@@ -50,7 +50,8 @@
           "voice_aliases": "Voice Aliases",
           "video_quality": "Video Quality",
           "ai_settings": "AI Settings",
-          "facial_recognition": "Facial Recognition"
+          "facial_recognition": "Facial Recognition",
+          "timeline": "Timeline"
         }
       },
       "default_provider": {
@@ -141,6 +142,14 @@
           "facial_recognition_enabled": "Enable Facial Recognition",
           "facial_recognition_url": "Server URL",
           "facial_recognition_confidence": "Minimum Confidence"
+        }
+      },
+      "timeline": {
+        "title": "Timeline",
+        "description": "Store camera analysis events in a calendar for historical tracking. View in the Calendar panel or add a calendar card to your dashboard.",
+        "data": {
+          "timeline_enabled": "Enable Timeline",
+          "timeline_retention_days": "Keep events for"
         }
       }
     },

@@ -35,6 +35,13 @@ analyze_camera:
       default: false
       selector:
         boolean:
+    remember:
+      name: Save to Timeline
+      description: Save this analysis to the Timeline calendar for historical tracking. View in Calendar panel or dashboard.
+      required: false
+      default: false
+      selector:
+        boolean:
 
 record_clip:
   name: Record Clip

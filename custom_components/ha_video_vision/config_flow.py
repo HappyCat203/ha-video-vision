@@ -60,6 +60,11 @@ from .const import (
     DEFAULT_FACIAL_RECOGNITION_URL,
     DEFAULT_FACIAL_RECOGNITION_ENABLED,
     DEFAULT_FACIAL_RECOGNITION_CONFIDENCE,
+    # Timeline
+    CONF_TIMELINE_ENABLED,
+    CONF_TIMELINE_RETENTION_DAYS,
+    DEFAULT_TIMELINE_ENABLED,
+    DEFAULT_TIMELINE_RETENTION_DAYS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -338,6 +343,7 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
                 "video_quality": "Video Quality",
                 "ai_settings": "AI Settings",
                 "facial_recognition": "Facial Recognition",
+                "timeline": "Timeline",
             },
         )
 
@@ -860,4 +866,34 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "url_hint": "URL of Facial Recognition add-on (e.g., http://localhost:8100)",
             },
+        )
+
+    async def async_step_timeline(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle timeline settings."""
+        if user_input is not None:
+            new_options = {**self._entry.options, **user_input}
+            return self.async_create_entry(title="", data=new_options)
+
+        current = {**self._entry.data, **self._entry.options}
+
+        return self.async_show_form(
+            step_id="timeline",
+            data_schema=vol.Schema({
+                vol.Required(
+                    CONF_TIMELINE_ENABLED,
+                    default=current.get(CONF_TIMELINE_ENABLED, DEFAULT_TIMELINE_ENABLED)
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_TIMELINE_RETENTION_DAYS,
+                    default=current.get(CONF_TIMELINE_RETENTION_DAYS, DEFAULT_TIMELINE_RETENTION_DAYS)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1, max=365, step=1,
+                        unit_of_measurement="days",
+                        mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+            }),
         )
