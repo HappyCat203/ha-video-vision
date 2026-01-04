@@ -224,6 +224,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def handle_identify_faces(call: ServiceCall) -> dict[str, Any]:
         """Handle identify_faces service call for facial recognition add-on."""
+        _LOGGER.warning("=== IDENTIFY_FACES SERVICE CALLED ===")
+        _LOGGER.warning("Service call data: %s", call.data)
+
         image_path = call.data["image_path"]
         # Use configured URL if not provided in service call
         server_url = call.data.get("server_url") or config.get(
@@ -232,6 +235,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         min_confidence = call.data.get("min_confidence") or config.get(
             CONF_FACIAL_RECOGNITION_CONFIDENCE, DEFAULT_FACIAL_RECOGNITION_CONFIDENCE
         )
+
+        _LOGGER.warning("Config facial rec URL: %s", config.get(CONF_FACIAL_RECOGNITION_URL))
+        _LOGGER.warning("Using server_url: %s, min_confidence: %s", server_url, min_confidence)
 
         return await analyzer.identify_faces(image_path, server_url, min_confidence)
 
