@@ -523,17 +523,33 @@ class VideoAnalyzer:
         
         return None
 
-    async def _get_camera_snapshot(self, entity_id: str, retries: int = 3, delay: float = 1.0) -> bytes | None:
+    async def _get_camera_snapshot(
+        self, entity_id: str, retries: int = 3, delay: float = 1.0, is_cloud_camera: bool = False
+    ) -> bytes | None:
         """Get camera snapshot using HA's camera component with retry logic.
 
         For cloud-based cameras (Ring, Nest, etc.), the first snapshot may be stale.
-        Retry with delays to allow the camera to process new events.
+        This method uses a "wake-up" request to prime the camera before capturing.
 
-        The function requests multiple snapshots and compares them to detect fresh content.
+        Args:
+            entity_id: Camera entity ID
+            retries: Number of retry attempts
+            delay: Base delay between retries (seconds)
+            is_cloud_camera: If True, uses optimized cloud camera strategy
         """
         last_image = None
         last_error = None
-        initial_delay = delay
+
+        # For cloud cameras (Ring/Nest), send a "wake-up" request first
+        # This primes the camera to start capturing fresh content
+        if is_cloud_camera:
+            try:
+                _LOGGER.debug("Sending wake-up snapshot request to cloud camera %s", entity_id)
+                await async_get_image(self.hass, entity_id)
+                # Brief pause to let the camera start processing
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                _LOGGER.debug("Wake-up request for %s failed (non-critical): %s", entity_id, e)
 
         for attempt in range(retries):
             try:
@@ -543,8 +559,11 @@ class VideoAnalyzer:
                         attempt + 1, retries, entity_id, delay
                     )
                     await asyncio.sleep(delay)
-                    # Increase delay for next attempt (exponential backoff)
-                    delay = min(delay * 1.5, 5.0)
+                    # Linear backoff for cloud cameras (faster), exponential for local
+                    if is_cloud_camera:
+                        delay = min(delay + 0.5, 3.0)  # Max 3s delay for cloud
+                    else:
+                        delay = min(delay * 1.5, 5.0)
 
                 image = await async_get_image(self.hass, entity_id)
                 if image and image.content:
@@ -564,13 +583,22 @@ class VideoAnalyzer:
                                 entity_id, attempt + 1
                             )
                     else:
-                        # First image - save for comparison but continue to verify freshness
-                        _LOGGER.debug(
-                            "Got initial snapshot from %s (%d bytes), verifying freshness...",
-                            entity_id, len(image.content)
-                        )
+                        # First image - for cloud cameras after wake-up, likely fresher
+                        # For local cameras, verify freshness with one more request
+                        if is_cloud_camera and attempt == 0:
+                            _LOGGER.debug(
+                                "Got snapshot from cloud camera %s (%d bytes) after wake-up",
+                                entity_id, len(image.content)
+                            )
+                            # Accept first image after wake-up for speed
+                            return image.content
+                        else:
+                            _LOGGER.debug(
+                                "Got initial snapshot from %s (%d bytes), verifying freshness...",
+                                entity_id, len(image.content)
+                            )
 
-                    # Always save the image for comparison
+                    # Save the image for comparison
                     last_image = image.content
 
             except Exception as e:
@@ -583,14 +611,13 @@ class VideoAnalyzer:
         # All retries exhausted
         if last_error:
             _LOGGER.warning(
-                "Failed to get fresh snapshot from %s after %d attempts: %s",
+                "Failed to get snapshot from %s after %d attempts: %s",
                 entity_id, retries, last_error
             )
         elif last_image:
-            _LOGGER.warning(
-                "Snapshot from %s unchanged across %d attempts - may be stale (cloud camera cache). "
-                "Consider increasing 'Capture Delay' in blueprint settings.",
-                entity_id, retries
+            _LOGGER.debug(
+                "Returning snapshot from %s (content unchanged across attempts)",
+                entity_id
             )
             return last_image
         else:
@@ -795,16 +822,14 @@ class VideoAnalyzer:
 
         if not stream_url:
             # No stream URL (cloud camera like Ring/Nest) - use snapshot only
-            # Use more retries and longer delays for cloud cameras
-            _LOGGER.warning(
-                "No stream URL for %s - using snapshot mode (cloud camera). "
-                "Video-only providers (Google Gemini, OpenRouter) will not work. "
-                "Consider using a local vLLM provider for cloud cameras, or "
-                "increase 'Capture Delay' in the blueprint if snapshots are stale.",
+            # Use optimized cloud camera strategy with wake-up request
+            _LOGGER.info(
+                "Cloud camera detected: %s - using optimized snapshot mode. "
+                "For video analysis, consider using ring-mqtt add-on for RTSP streaming.",
                 entity_id
             )
             frame_bytes = await self._get_camera_snapshot(
-                entity_id, retries=5, delay=2.0  # More retries with longer delays for cloud cameras
+                entity_id, retries=3, delay=1.0, is_cloud_camera=True
             )
             return video_bytes, frame_bytes
 
@@ -969,11 +994,10 @@ class VideoAnalyzer:
         # VIDEO ONLY - This integration focuses on video analysis, not images
         if not video_bytes:
             return (
-                "No video available for analysis. This camera does not provide a video stream "
-                "(common with cloud cameras like Ring or Nest). Google Gemini requires video input. "
-                "Solutions: 1) Use a local vLLM provider which supports image analysis, "
-                "2) Use the ring-mqtt add-on to enable RTSP streaming, or "
-                "3) Switch to a camera that provides direct video streams."
+                "Cloud camera detected (Ring/Nest) - no video stream available. "
+                "Google Gemini requires video input and cannot analyze snapshots. "
+                "To fix: Install the ring-mqtt add-on to enable RTSP streaming, "
+                "or switch to a provider that supports image analysis (Anthropic, OpenAI, or local vLLM)."
             )
 
         # Use provided overrides or fall back to config
@@ -1064,11 +1088,10 @@ class VideoAnalyzer:
         # VIDEO ONLY - This integration focuses on video analysis, not images
         if not video_bytes:
             return (
-                "No video available for analysis. This camera does not provide a video stream "
-                "(common with cloud cameras like Ring or Nest). OpenRouter requires video input. "
-                "Solutions: 1) Use a local vLLM provider which supports image analysis, "
-                "2) Use the ring-mqtt add-on to enable RTSP streaming, or "
-                "3) Switch to a camera that provides direct video streams."
+                "Cloud camera detected (Ring/Nest) - no video stream available. "
+                "OpenRouter requires video input and cannot analyze snapshots. "
+                "To fix: Install the ring-mqtt add-on to enable RTSP streaming, "
+                "or switch to a provider that supports image analysis (Anthropic, OpenAI, or local vLLM)."
             )
 
         # Use provided overrides or fall back to config
