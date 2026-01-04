@@ -115,6 +115,15 @@ DEFAULT_FACIAL_RECOGNITION_ENABLED: Final = False
 DEFAULT_FACIAL_RECOGNITION_CONFIDENCE: Final = 50
 
 # =============================================================================
+# TIMELINE (Calendar-based event history)
+# =============================================================================
+CONF_TIMELINE_ENABLED: Final = "timeline_enabled"
+CONF_TIMELINE_RETENTION_DAYS: Final = "timeline_retention_days"
+
+DEFAULT_TIMELINE_ENABLED: Final = True
+DEFAULT_TIMELINE_RETENTION_DAYS: Final = 30
+
+# =============================================================================
 # SERVICE NAMES
 # =============================================================================
 SERVICE_ANALYZE_CAMERA: Final = "analyze_camera"
@@ -130,3 +139,4 @@ ATTR_USER_QUERY: Final = "user_query"
 ATTR_NOTIFY: Final = "notify"
 ATTR_PROVIDER: Final = "provider"
 ATTR_FACIAL_RECOGNITION: Final = "facial_recognition"
+ATTR_REMEMBER: Final = "remember"

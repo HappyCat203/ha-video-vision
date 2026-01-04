@@ -99,6 +99,14 @@ blueprint:
       selector:
         boolean:
 
+    # Timeline
+    save_to_timeline:
+      name: "Save to Timeline"
+      description: "Save each analysis to the Timeline calendar. View history in the Calendar panel or dashboard."
+      default: true
+      selector:
+        boolean:
+
 mode: single
 max_exceeded: silent
 
@@ -112,6 +120,7 @@ variables:
   time_end: !input notify_end
   delay_seconds: !input capture_delay
   face_rec_enabled: !input facial_recognition_enabled
+  timeline_enabled: !input save_to_timeline
   # Default prompt - factual and deterministic
   default_prompt: "Briefly describe what you see. Only state what is clearly visible. Do not speculate. If a person is visible, describe their appearance and actions. 2-3 sentences max."
   # Build service names from device IDs
@@ -140,13 +149,14 @@ action:
   - delay:
       seconds: "{{ delay_seconds }}"
 
-  # Analyze camera with prompt (includes facial recognition when enabled)
+  # Analyze camera with prompt (includes facial recognition and timeline when enabled)
   - service: ha_video_vision.analyze_camera
     data:
       camera: !input camera_name
       duration: 3
       user_query: "{{ user_prompt if user_prompt else default_prompt }}"
       facial_recognition: "{{ face_rec_enabled }}"
+      remember: "{{ timeline_enabled }}"
     response_variable: result
 
   # Send notifications if successful
