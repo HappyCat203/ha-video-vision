@@ -44,10 +44,10 @@ from .const import (
     # Video Settings
     CONF_VIDEO_DURATION,
     CONF_VIDEO_WIDTH,
-    CONF_VIDEO_FPS,
+    CONF_VIDEO_FPS_PERCENT,
     DEFAULT_VIDEO_DURATION,
     DEFAULT_VIDEO_WIDTH,
-    DEFAULT_VIDEO_FPS,
+    DEFAULT_VIDEO_FPS_PERCENT,
     # Snapshot
     CONF_SNAPSHOT_DIR,
     CONF_SNAPSHOT_QUALITY,
@@ -762,6 +762,8 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             if CONF_VIDEO_WIDTH in user_input:
                 user_input[CONF_VIDEO_WIDTH] = int(user_input[CONF_VIDEO_WIDTH])
+            if CONF_VIDEO_FPS_PERCENT in user_input:
+                user_input[CONF_VIDEO_FPS_PERCENT] = int(user_input[CONF_VIDEO_FPS_PERCENT])
             new_options = {**self._entry.options, **user_input}
             return self.async_create_entry(title="", data=new_options)
 
@@ -779,8 +781,16 @@ class VideoVisionOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
-                vol.Required(CONF_VIDEO_FPS, default=current.get(CONF_VIDEO_FPS, DEFAULT_VIDEO_FPS)): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=5, max=30, step=1, unit_of_measurement="fps", mode=selector.NumberSelectorMode.SLIDER)
+                vol.Required(CONF_VIDEO_FPS_PERCENT, default=str(current.get(CONF_VIDEO_FPS_PERCENT, DEFAULT_VIDEO_FPS_PERCENT))): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"label": "25% (smaller files)", "value": "25"},
+                            {"label": "50%", "value": "50"},
+                            {"label": "75%", "value": "75"},
+                            {"label": "100% (native)", "value": "100"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
                 ),
                 vol.Required(CONF_SNAPSHOT_QUALITY, default=current.get(CONF_SNAPSHOT_QUALITY, DEFAULT_SNAPSHOT_QUALITY)): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=50, max=100, step=5, unit_of_measurement="%", mode=selector.NumberSelectorMode.SLIDER)
