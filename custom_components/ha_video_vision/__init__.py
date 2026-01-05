@@ -50,8 +50,10 @@ from .const import (
     # Video
     CONF_VIDEO_DURATION,
     CONF_VIDEO_WIDTH,
+    CONF_VIDEO_FPS,
     DEFAULT_VIDEO_DURATION,
     DEFAULT_VIDEO_WIDTH,
+    DEFAULT_VIDEO_FPS,
     # Snapshot
     CONF_SNAPSHOT_DIR,
     CONF_SNAPSHOT_QUALITY,
@@ -398,14 +400,15 @@ class VideoAnalyzer:
         # Video settings
         self.video_duration = config.get(CONF_VIDEO_DURATION, DEFAULT_VIDEO_DURATION)
         self.video_width = config.get(CONF_VIDEO_WIDTH, DEFAULT_VIDEO_WIDTH)
+        self.video_fps = config.get(CONF_VIDEO_FPS, DEFAULT_VIDEO_FPS)
 
         # Snapshot settings
         self.snapshot_dir = config.get(CONF_SNAPSHOT_DIR, DEFAULT_SNAPSHOT_DIR)
         self.snapshot_quality = config.get(CONF_SNAPSHOT_QUALITY, DEFAULT_SNAPSHOT_QUALITY)
 
         _LOGGER.info(
-            "HA Video Vision config - Provider: %s, Cameras: %d, Resolution: %dp",
-            self.provider, len(self.selected_cameras), self.video_width
+            "HA Video Vision config - Provider: %s, Cameras: %d, Resolution: %dp, FPS: %d",
+            self.provider, len(self.selected_cameras), self.video_width, self.video_fps
         )
         # Log configured providers
         if self.provider_configs:
@@ -739,7 +742,7 @@ class VideoAnalyzer:
         cmd.extend([
             "-t", str(duration),
             "-vf", f"scale={self.video_width}:-2",
-            "-r", "10",
+            "-r", str(self.video_fps),
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-crf", "28",

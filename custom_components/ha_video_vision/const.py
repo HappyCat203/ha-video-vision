@@ -75,9 +75,11 @@ DEFAULT_CAMERA_ALIASES: Final = {}
 # =============================================================================
 CONF_VIDEO_DURATION: Final = "video_duration"
 CONF_VIDEO_WIDTH: Final = "video_width"
+CONF_VIDEO_FPS: Final = "video_fps"
 
 DEFAULT_VIDEO_DURATION: Final = 3
 DEFAULT_VIDEO_WIDTH: Final = 640
+DEFAULT_VIDEO_FPS: Final = 10
 
 # =============================================================================
 # SNAPSHOT SETTINGS
