@@ -357,13 +357,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 class VideoAnalyzer:
     """Class to handle video analysis with auto-discovered cameras."""
 
-    # Cache TTL constants
-    FPS_CACHE_TTL = 3600  # 1 hour - FPS rarely changes for a camera
-    CAMERA_CACHE_TTL = 30  # 30 seconds - cameras can be added/removed
+    # Cache TTL constants (optimized for speed)
+    FPS_CACHE_TTL = 86400  # 24 hours - FPS essentially never changes for a camera
+    CAMERA_CACHE_TTL = 300  # 5 minutes - cameras are rarely added/removed/renamed
 
     # Hardware encoder priority (fastest to slowest)
     HW_ENCODERS = [
-        ("h264_nvenc", "NVIDIA GPU"),      # NVIDIA GPUs
+        ("h264_nvenc", "NVIDIA GPU"),      # NVIDIA GPUs - RTX 5090 will CRUSH this
         ("h264_qsv", "Intel QuickSync"),   # Intel iGPU
         ("h264_vaapi", "VA-API"),          # Linux VA-API (AMD/Intel)
         ("h264_videotoolbox", "Apple"),    # macOS
