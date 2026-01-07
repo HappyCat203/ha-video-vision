@@ -117,6 +117,17 @@ blueprint:
       selector:
         boolean:
 
+    facial_recognition_frame_position:
+      name: "Facial Recognition Frame Position (%)"
+      description: "Which frame to use for facial recognition. This is SEPARATE from the notification image. Use 50% (middle) or higher to capture faces after people have walked closer to the camera. Default 50%."
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 10
+          unit_of_measurement: "%"
+
     # Timeline
     save_to_timeline:
       name: "Save to Timeline"
@@ -140,6 +151,7 @@ variables:
   delay_seconds: !input capture_delay
   frame_pos: !input frame_position
   face_rec_enabled: !input facial_recognition_enabled
+  face_rec_frame_pos: !input facial_recognition_frame_position
   timeline_enabled: !input save_to_timeline
   # Default prompt - reports ALL people/vehicles whether moving or stationary
   default_prompt: "Describe any people, vehicles, or notable activity visible. Report ALL people and vehicles, whether moving or stationary. For people, describe their appearance and actions. Ignore static background objects like parked cars and structures. If no people, vehicles, or notable activity are present, respond: 'No activity observed.' 2-3 sentences max."
@@ -175,12 +187,14 @@ action:
 
   # Analyze camera with prompt - VIDEO ONLY analysis
   # Frame position determines which video frame is used for notification image
+  # Facial recognition uses a separate frame position for better face capture
   - service: ha_video_vision.analyze_camera
     data:
       camera: !input camera_name
       # Duration omitted - uses integration's configured video_duration for consistent recording length
       user_query: "{{ user_prompt if user_prompt else default_prompt }}"
       facial_recognition: "{{ face_rec_enabled }}"
+      facial_recognition_frame_position: "{{ face_rec_frame_pos }}"
       remember: "{{ timeline_enabled }}"
       frame_position: "{{ frame_pos }}"
     response_variable: result
@@ -223,9 +237,10 @@ action:
                       # Priority
                       ttl: 0
                       priority: high
-                      # Android
+                      # Android - bigText style prevents text cutoff
                       channel: "ha_video_vision"
                       sticky: true
+                      style: big_text
                       # iOS
                       attachment:
                         url: "{{ result.snapshot_url }}"
