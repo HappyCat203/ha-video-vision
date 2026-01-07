@@ -76,10 +76,14 @@ DEFAULT_CAMERA_ALIASES: Final = {}
 CONF_VIDEO_DURATION: Final = "video_duration"
 CONF_VIDEO_WIDTH: Final = "video_width"
 CONF_VIDEO_FPS_PERCENT: Final = "video_fps_percent"
+CONF_NOTIFICATION_FRAME_POSITION: Final = "notification_frame_position"
 
 DEFAULT_VIDEO_DURATION: Final = 3
 DEFAULT_VIDEO_WIDTH: Final = 640
 DEFAULT_VIDEO_FPS_PERCENT: Final = 100  # 100% of camera's native FPS
+# Frame position for notification image (percentage of video duration)
+# 0 = first frame, 50 = middle, 100 = last frame
+DEFAULT_NOTIFICATION_FRAME_POSITION: Final = 50
 
 # =============================================================================
 # SNAPSHOT SETTINGS
@@ -125,4 +129,4 @@ ATTR_DURATION: Final = "duration"
 ATTR_USER_QUERY: Final = "user_query"
 ATTR_FACIAL_RECOGNITION: Final = "facial_recognition"
 ATTR_REMEMBER: Final = "remember"
-ATTR_INSTANT_CAPTURE: Final = "instant_capture"
+ATTR_FRAME_POSITION: Final = "frame_position"
