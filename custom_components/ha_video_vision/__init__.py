@@ -77,6 +77,7 @@ from .const import (
     ATTR_DURATION,
     ATTR_USER_QUERY,
     ATTR_FACIAL_RECOGNITION,
+    ATTR_FACIAL_RECOGNITION_FRAME_POSITION,
     ATTR_REMEMBER,
     ATTR_FRAME_POSITION,
 )
@@ -153,6 +154,8 @@ SERVICE_ANALYZE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_DURATION, default=3): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
         vol.Optional(ATTR_USER_QUERY, default=""): cv.string,
         vol.Optional(ATTR_FACIAL_RECOGNITION, default=False): cv.boolean,
+        # Separate frame position for facial recognition (default 50% = middle of video)
+        vol.Optional(ATTR_FACIAL_RECOGNITION_FRAME_POSITION): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
         vol.Optional(ATTR_REMEMBER, default=False): cv.boolean,
         # Frame position for notification image (0=first, 50=middle, 100=last)
         vol.Optional(ATTR_FRAME_POSITION): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
@@ -231,11 +234,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         do_remember = call.data.get(ATTR_REMEMBER, False)
         # Frame position for notification (None = use config default)
         frame_position = call.data.get(ATTR_FRAME_POSITION)
+        # Separate frame position for facial recognition (allows capturing face at different time)
+        facial_recognition_frame_position = call.data.get(ATTR_FACIAL_RECOGNITION_FRAME_POSITION)
 
-        result = await analyzer.analyze_camera(camera, duration, user_query, frame_position)
+        result = await analyzer.analyze_camera(
+            camera, duration, user_query, frame_position, facial_recognition_frame_position
+        )
 
         # Run facial recognition if requested and analysis was successful
-        if do_facial_recognition and result.get("success") and result.get("snapshot_path"):
+        # Use face_rec_snapshot_path if available (separate frame position for better face capture)
+        face_rec_path = result.get("face_rec_snapshot_path") or result.get("snapshot_path")
+        if do_facial_recognition and result.get("success") and face_rec_path:
             _LOGGER.warning("=== FACIAL RECOGNITION REQUESTED (via analyze_camera) ===")
             server_url = config.get(
                 CONF_FACIAL_RECOGNITION_URL, DEFAULT_FACIAL_RECOGNITION_URL
@@ -243,10 +252,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             min_confidence = config.get(
                 CONF_FACIAL_RECOGNITION_CONFIDENCE, DEFAULT_FACIAL_RECOGNITION_CONFIDENCE
             )
-            _LOGGER.warning("Using server_url: %s, min_confidence: %s", server_url, min_confidence)
+            _LOGGER.warning("Using server_url: %s, min_confidence: %s, frame: %s",
+                          server_url, min_confidence, face_rec_path)
 
             face_result = await analyzer.identify_faces(
-                result["snapshot_path"], server_url, min_confidence
+                face_rec_path, server_url, min_confidence
             )
             # Add face results to the response
             result["face_recognition"] = face_result
@@ -888,8 +898,17 @@ class VideoAnalyzer:
 
         Uses hardware acceleration if available (NVENC, QuickSync, VA-API, VideoToolbox).
         """
-        # Base command
+        # Base command with low-latency flags for instant recording start
         cmd = ["ffmpeg", "-y"]
+
+        # Low-latency input flags - START RECORDING IMMEDIATELY
+        # These minimize startup delay by reducing buffering and analysis time
+        cmd.extend([
+            "-fflags", "+nobuffer+flush_packets",
+            "-flags", "low_delay",
+            "-probesize", "32",
+            "-analyzeduration", "0",
+        ])
 
         # Add protocol-specific options
         if stream_url.startswith("rtsp://"):
@@ -1035,9 +1054,10 @@ class VideoAnalyzer:
                     pass
 
     async def _record_video_and_frames(
-        self, entity_id: str, duration: int, frame_position: int | None = None
-    ) -> tuple[bytes | None, bytes | None]:
-        """Record video and extract frame for notifications.
+        self, entity_id: str, duration: int, frame_position: int | None = None,
+        facial_recognition_frame_position: int | None = None
+    ) -> tuple[bytes | None, bytes | None, bytes | None]:
+        """Record video and extract frames for notifications and facial recognition.
 
         Args:
             entity_id: Camera entity ID
@@ -1045,13 +1065,18 @@ class VideoAnalyzer:
             frame_position: Position in video to extract notification frame (0-100%).
                           0 = first frame, 50 = middle, 100 = last frame.
                           None = use configured default.
+            facial_recognition_frame_position: Position in video to extract face recognition frame.
+                          If provided and different from frame_position, extracts a separate frame.
+                          None = use same frame as notification.
 
-        Returns: (video_bytes, frame_bytes)
+        Returns: (video_bytes, notification_frame_bytes, face_rec_frame_bytes)
+                 face_rec_frame_bytes is None if same position as notification or not requested.
         """
         stream_url = await self._get_stream_url(entity_id)
 
         video_bytes = None
         frame_bytes = None
+        face_rec_frame_bytes = None
 
         # Use configured default if not specified
         if frame_position is None:
@@ -1068,10 +1093,11 @@ class VideoAnalyzer:
             frame_bytes = await self._get_camera_snapshot(
                 entity_id, retries=3, delay=1.0, is_cloud_camera=True
             )
-            return video_bytes, frame_bytes
+            return video_bytes, frame_bytes, None
 
         video_path = None
         frame_path = None
+        face_rec_frame_path = None
 
         try:
             with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as vf:
@@ -1131,15 +1157,47 @@ class VideoAnalyzer:
                     async with aiofiles.open(frame_path, 'rb') as f:
                         frame_bytes = await f.read()
 
-            return video_bytes, frame_bytes
+                # Extract separate frame for facial recognition if requested and different position
+                if (facial_recognition_frame_position is not None and
+                    facial_recognition_frame_position != frame_position):
+                    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as frf:
+                        face_rec_frame_path = frf.name
+
+                    face_rec_frame_time = duration * (facial_recognition_frame_position / 100)
+                    _LOGGER.debug(
+                        "Extracting facial recognition frame at %d%% (%.2fs into %ds video)",
+                        facial_recognition_frame_position, face_rec_frame_time, duration
+                    )
+
+                    face_rec_cmd = [
+                        "ffmpeg", "-y",
+                        "-ss", str(face_rec_frame_time),
+                        "-i", video_path,
+                        "-frames:v", "1",
+                        "-q:v", "2",
+                        face_rec_frame_path
+                    ]
+
+                    face_rec_proc = await asyncio.create_subprocess_exec(
+                        *face_rec_cmd,
+                        stdout=asyncio.subprocess.DEVNULL,
+                        stderr=asyncio.subprocess.DEVNULL
+                    )
+                    await asyncio.wait_for(face_rec_proc.wait(), timeout=10)
+
+                    if os.path.exists(face_rec_frame_path) and os.path.getsize(face_rec_frame_path) > 0:
+                        async with aiofiles.open(face_rec_frame_path, 'rb') as f:
+                            face_rec_frame_bytes = await f.read()
+
+            return video_bytes, frame_bytes, face_rec_frame_bytes
 
         except Exception as e:
             _LOGGER.error("Error recording video from %s: %s", entity_id, e)
             # Try to get a snapshot as fallback
             fallback_frame = await self._get_camera_snapshot(entity_id)
-            return None, fallback_frame
+            return None, fallback_frame, None
         finally:
-            for path in [video_path, frame_path]:
+            for path in [video_path, frame_path, face_rec_frame_path]:
                 if path and os.path.exists(path):
                     try:
                         os.remove(path)
@@ -1159,7 +1217,8 @@ class VideoAnalyzer:
             return None
 
     async def analyze_camera(
-        self, camera_input: str, duration: int = None, user_query: str = "", frame_position: int | None = None
+        self, camera_input: str, duration: int = None, user_query: str = "",
+        frame_position: int | None = None, facial_recognition_frame_position: int | None = None
     ) -> dict[str, Any]:
         """Analyze camera using VIDEO and AI vision.
 
@@ -1170,13 +1229,17 @@ class VideoAnalyzer:
             frame_position: Position in video to extract notification frame (0-100%).
                           0 = first frame, 50 = middle, 100 = last frame.
                           None = use configured default.
+            facial_recognition_frame_position: Separate frame position for facial recognition.
+                          If different from notification frame_position, extracts a separate frame.
+                          None = use same frame as notification.
         """
         duration = duration or self.video_duration
 
         _LOGGER.warning(
-            "Camera analysis requested - Input: '%s', Provider: %s, Model: %s, Frame: %s%%",
+            "Camera analysis requested - Input: '%s', Provider: %s, Model: %s, Frame: %s%%, FR Frame: %s%%",
             camera_input, self.provider, self.vllm_model,
-            frame_position if frame_position is not None else self.notification_frame_position
+            frame_position if frame_position is not None else self.notification_frame_position,
+            facial_recognition_frame_position if facial_recognition_frame_position is not None else "same"
         )
 
         entity_id = self._find_camera_entity(camera_input)
@@ -1191,8 +1254,11 @@ class VideoAnalyzer:
         friendly_name = state.attributes.get("friendly_name", entity_id) if state else entity_id
         safe_name = entity_id.replace("camera.", "").replace(".", "_")
 
-        # Record video and extract notification frame - VIDEO ONLY, no delays
-        video_bytes, frame_bytes = await self._record_video_and_frames(entity_id, duration, frame_position)
+        # Record video and extract frames - VIDEO ONLY, no delays
+        # Extracts both notification frame and optional separate facial recognition frame
+        video_bytes, frame_bytes, face_rec_frame_bytes = await self._record_video_and_frames(
+            entity_id, duration, frame_position, facial_recognition_frame_position
+        )
 
         # Prepare prompt
         if user_query:
@@ -1205,15 +1271,23 @@ class VideoAnalyzer:
                 "Be concise (2-3 sentences). Say 'no activity' if nothing notable is happening."
             )
 
-        # OPTIMIZATION: Run AI analysis and snapshot save in PARALLEL
-        # This saves ~0.1-0.3s by not waiting for snapshot to finish before returning
+        # OPTIMIZATION: Run AI analysis and snapshot saves in PARALLEL
+        # This saves ~0.1-0.3s by not waiting for snapshots to finish before returning
         snapshot_task = None
+        face_rec_snapshot_task = None
+
         if frame_bytes:
             snapshot_task = asyncio.create_task(
                 self._save_snapshot_async(frame_bytes, safe_name)
             )
 
-        # Send to AI provider (snapshot saves in background)
+        # Save facial recognition frame separately if it exists (different position requested)
+        if face_rec_frame_bytes:
+            face_rec_snapshot_task = asyncio.create_task(
+                self._save_snapshot_async(face_rec_frame_bytes, f"{safe_name}_face_rec")
+            )
+
+        # Send to AI provider (snapshots save in background)
         description, provider_used = await self._analyze_with_provider(video_bytes, frame_bytes, prompt)
 
         _LOGGER.warning(
@@ -1221,10 +1295,15 @@ class VideoAnalyzer:
             friendly_name, entity_id, provider_used, len(description) if description else 0
         )
 
-        # Wait for snapshot save to complete (should already be done by now)
+        # Wait for snapshot saves to complete (should already be done by now)
         snapshot_path = None
+        face_rec_snapshot_path = None
+
         if snapshot_task:
             snapshot_path = await snapshot_task
+
+        if face_rec_snapshot_task:
+            face_rec_snapshot_path = await face_rec_snapshot_task
 
         # Check for person-related words in AI description
         # Expanded list to catch more variations of how the AI might describe people
@@ -1248,6 +1327,8 @@ class VideoAnalyzer:
             "person_detected": person_detected,
             "snapshot_path": snapshot_path,
             "snapshot_url": f"/media/local/ha_video_vision/{safe_name}_latest.jpg" if snapshot_path else None,
+            # Facial recognition uses separate frame if available, otherwise falls back to notification frame
+            "face_rec_snapshot_path": face_rec_snapshot_path or snapshot_path,
             "provider_used": provider_used,
             "default_provider": self.provider,
         }

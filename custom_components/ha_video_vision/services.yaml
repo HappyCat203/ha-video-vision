@@ -35,6 +35,16 @@ analyze_camera:
       default: false
       selector:
         boolean:
+    facial_recognition_frame_position:
+      name: Facial Recognition Frame Position
+      description: Which frame to use for facial recognition (0-100%). This is SEPARATE from the notification image. Use 50% (middle) or higher to capture faces after people have walked closer to the camera. If not set, uses the same frame as the notification.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 10
+          unit_of_measurement: "%"
     remember:
       name: Save to Timeline
       description: Save this analysis to the Timeline calendar for historical tracking. View in Calendar panel or dashboard.
