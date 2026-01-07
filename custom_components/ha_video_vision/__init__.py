@@ -51,9 +51,11 @@ from .const import (
     CONF_VIDEO_DURATION,
     CONF_VIDEO_WIDTH,
     CONF_VIDEO_FPS_PERCENT,
+    CONF_NOTIFICATION_FRAME_POSITION,
     DEFAULT_VIDEO_DURATION,
     DEFAULT_VIDEO_WIDTH,
     DEFAULT_VIDEO_FPS_PERCENT,
+    DEFAULT_NOTIFICATION_FRAME_POSITION,
     # Snapshot
     CONF_SNAPSHOT_DIR,
     CONF_SNAPSHOT_QUALITY,
@@ -76,7 +78,7 @@ from .const import (
     ATTR_USER_QUERY,
     ATTR_FACIAL_RECOGNITION,
     ATTR_REMEMBER,
-    ATTR_INSTANT_CAPTURE,
+    ATTR_FRAME_POSITION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -152,7 +154,8 @@ SERVICE_ANALYZE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_USER_QUERY, default=""): cv.string,
         vol.Optional(ATTR_FACIAL_RECOGNITION, default=False): cv.boolean,
         vol.Optional(ATTR_REMEMBER, default=False): cv.boolean,
-        vol.Optional(ATTR_INSTANT_CAPTURE, default=False): cv.boolean,
+        # Frame position for notification image (0=first, 50=middle, 100=last)
+        vol.Optional(ATTR_FRAME_POSITION): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
     }
 )
 
@@ -226,9 +229,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         user_query = call.data.get(ATTR_USER_QUERY, "")
         do_facial_recognition = call.data.get(ATTR_FACIAL_RECOGNITION, False)
         do_remember = call.data.get(ATTR_REMEMBER, False)
-        instant_capture = call.data.get(ATTR_INSTANT_CAPTURE, False)
+        # Frame position for notification (None = use config default)
+        frame_position = call.data.get(ATTR_FRAME_POSITION)
 
-        result = await analyzer.analyze_camera(camera, duration, user_query, instant_capture)
+        result = await analyzer.analyze_camera(camera, duration, user_query, frame_position)
 
         # Run facial recognition if requested and analysis was successful
         if do_facial_recognition and result.get("success") and result.get("snapshot_path"):
@@ -421,6 +425,10 @@ class VideoAnalyzer:
         self.video_duration = config.get(CONF_VIDEO_DURATION, DEFAULT_VIDEO_DURATION)
         self.video_width = config.get(CONF_VIDEO_WIDTH, DEFAULT_VIDEO_WIDTH)
         self.video_fps_percent = config.get(CONF_VIDEO_FPS_PERCENT, DEFAULT_VIDEO_FPS_PERCENT)
+        # Frame position for notification image (0=first, 50=middle, 100=last)
+        self.notification_frame_position = config.get(
+            CONF_NOTIFICATION_FRAME_POSITION, DEFAULT_NOTIFICATION_FRAME_POSITION
+        )
 
         # Snapshot settings
         self.snapshot_dir = config.get(CONF_SNAPSHOT_DIR, DEFAULT_SNAPSHOT_DIR)
@@ -1027,17 +1035,16 @@ class VideoAnalyzer:
                     pass
 
     async def _record_video_and_frames(
-        self, entity_id: str, duration: int, instant_capture: bool = False
+        self, entity_id: str, duration: int, frame_position: int | None = None
     ) -> tuple[bytes | None, bytes | None]:
         """Record video and extract frame for notifications.
 
         Args:
             entity_id: Camera entity ID
             duration: Recording duration in seconds
-            instant_capture: If True, grab snapshot IMMEDIATELY before recording.
-                           The snapshot captures fast-moving subjects (like delivery
-                           people) who may leave before video recording completes.
-                           Video still provides context for AI analysis.
+            frame_position: Position in video to extract notification frame (0-100%).
+                          0 = first frame, 50 = middle, 100 = last frame.
+                          None = use configured default.
 
         Returns: (video_bytes, frame_bytes)
         """
@@ -1046,13 +1053,9 @@ class VideoAnalyzer:
         video_bytes = None
         frame_bytes = None
 
-        # INSTANT CAPTURE MODE: Grab snapshot FIRST before anything else
-        # This ensures we capture whoever triggered the motion, even if they leave quickly
-        if instant_capture:
-            _LOGGER.info("Instant capture mode: grabbing snapshot IMMEDIATELY for %s", entity_id)
-            frame_bytes = await self._get_camera_snapshot(entity_id)
-            if frame_bytes:
-                _LOGGER.info("Instant snapshot captured (%d bytes) - now recording video...", len(frame_bytes))
+        # Use configured default if not specified
+        if frame_position is None:
+            frame_position = self.notification_frame_position
 
         if not stream_url:
             # No stream URL (cloud camera like Ring/Nest) - use snapshot only
@@ -1062,11 +1065,9 @@ class VideoAnalyzer:
                 "For video analysis, consider using ring-mqtt add-on for RTSP streaming.",
                 entity_id
             )
-            # If instant capture already got a frame, use it; otherwise get one now
-            if not frame_bytes:
-                frame_bytes = await self._get_camera_snapshot(
-                    entity_id, retries=3, delay=1.0, is_cloud_camera=True
-                )
+            frame_bytes = await self._get_camera_snapshot(
+                entity_id, retries=3, delay=1.0, is_cloud_camera=True
+            )
             return video_bytes, frame_bytes
 
         video_path = None
@@ -1084,7 +1085,7 @@ class VideoAnalyzer:
             _LOGGER.debug("Recording at %d%% of native %.1f fps = %.1f fps",
                          self.video_fps_percent, native_fps, target_fps)
 
-            # Build and run video recording command
+            # Build and run video recording command - START IMMEDIATELY, no delays
             video_cmd = await self._build_ffmpeg_cmd(stream_url, duration, video_path, target_fps)
 
             video_proc = await asyncio.create_subprocess_exec(
@@ -1101,41 +1102,42 @@ class VideoAnalyzer:
                 async with aiofiles.open(video_path, 'rb') as f:
                     video_bytes = await f.read()
 
-                # Only extract frame from video if we don't have an instant capture
-                # Instant capture takes priority since it captured the trigger moment
-                if not frame_bytes:
-                    # Extract KEY FRAME from the RECORDED VIDEO at the midpoint
-                    # This ensures the snapshot matches EXACTLY what the AI sees
-                    midpoint = duration / 2
-                    frame_cmd = [
-                        "ffmpeg", "-y",
-                        "-ss", str(midpoint),  # Seek to midpoint
-                        "-i", video_path,       # Input is the recorded video
-                        "-frames:v", "1",
-                        "-q:v", "2",
-                        frame_path
-                    ]
+                # Extract frame at user-configured position for notification
+                # This allows users to tune which frame best captures their camera's subjects
+                # (e.g., 0% for cameras with lag, 50% for middle, 100% for end)
+                frame_time = duration * (frame_position / 100)
+                _LOGGER.debug(
+                    "Extracting notification frame at %d%% (%.2fs into %ds video)",
+                    frame_position, frame_time, duration
+                )
 
-                    frame_proc = await asyncio.create_subprocess_exec(
-                        *frame_cmd,
-                        stdout=asyncio.subprocess.DEVNULL,
-                        stderr=asyncio.subprocess.DEVNULL
-                    )
-                    await asyncio.wait_for(frame_proc.wait(), timeout=10)
+                frame_cmd = [
+                    "ffmpeg", "-y",
+                    "-ss", str(frame_time),
+                    "-i", video_path,
+                    "-frames:v", "1",
+                    "-q:v", "2",
+                    frame_path
+                ]
 
-                    if os.path.exists(frame_path) and os.path.getsize(frame_path) > 0:
-                        async with aiofiles.open(frame_path, 'rb') as f:
-                            frame_bytes = await f.read()
+                frame_proc = await asyncio.create_subprocess_exec(
+                    *frame_cmd,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                await asyncio.wait_for(frame_proc.wait(), timeout=10)
+
+                if os.path.exists(frame_path) and os.path.getsize(frame_path) > 0:
+                    async with aiofiles.open(frame_path, 'rb') as f:
+                        frame_bytes = await f.read()
 
             return video_bytes, frame_bytes
 
         except Exception as e:
             _LOGGER.error("Error recording video from %s: %s", entity_id, e)
-            # Try to get a snapshot as fallback (only if instant capture didn't get one)
-            if not frame_bytes:
-                fallback_frame = await self._get_camera_snapshot(entity_id)
-                return None, fallback_frame
-            return None, frame_bytes
+            # Try to get a snapshot as fallback
+            fallback_frame = await self._get_camera_snapshot(entity_id)
+            return None, fallback_frame
         finally:
             for path in [video_path, frame_path]:
                 if path and os.path.exists(path):
@@ -1157,23 +1159,24 @@ class VideoAnalyzer:
             return None
 
     async def analyze_camera(
-        self, camera_input: str, duration: int = None, user_query: str = "", instant_capture: bool = False
+        self, camera_input: str, duration: int = None, user_query: str = "", frame_position: int | None = None
     ) -> dict[str, Any]:
-        """Analyze camera using video and AI vision.
+        """Analyze camera using VIDEO and AI vision.
 
         Args:
             camera_input: Camera name or entity ID
             duration: Recording duration in seconds
             user_query: Custom prompt for AI analysis
-            instant_capture: If True, grab snapshot IMMEDIATELY before recording video.
-                           This ensures fast-moving subjects are captured in the snapshot
-                           even if they leave before video recording completes.
+            frame_position: Position in video to extract notification frame (0-100%).
+                          0 = first frame, 50 = middle, 100 = last frame.
+                          None = use configured default.
         """
         duration = duration or self.video_duration
 
         _LOGGER.warning(
-            "Camera analysis requested - Input: '%s', Provider: %s, Model: %s, Instant: %s",
-            camera_input, self.provider, self.vllm_model, instant_capture
+            "Camera analysis requested - Input: '%s', Provider: %s, Model: %s, Frame: %s%%",
+            camera_input, self.provider, self.vllm_model,
+            frame_position if frame_position is not None else self.notification_frame_position
         )
 
         entity_id = self._find_camera_entity(camera_input)
@@ -1188,8 +1191,8 @@ class VideoAnalyzer:
         friendly_name = state.attributes.get("friendly_name", entity_id) if state else entity_id
         safe_name = entity_id.replace("camera.", "").replace(".", "_")
 
-        # Record video and get frames
-        video_bytes, frame_bytes = await self._record_video_and_frames(entity_id, duration, instant_capture)
+        # Record video and extract notification frame - VIDEO ONLY, no delays
+        video_bytes, frame_bytes = await self._record_video_and_frames(entity_id, duration, frame_position)
 
         # Prepare prompt
         if user_query:
@@ -1224,10 +1227,17 @@ class VideoAnalyzer:
             snapshot_path = await snapshot_task
 
         # Check for person-related words in AI description
+        # Expanded list to catch more variations of how the AI might describe people
         description_text = description or ""
+        person_keywords = [
+            "person", "people", "someone", "man", "woman", "child",
+            "individual", "adult", "figure", "pedestrian", "walker",
+            "visitor", "delivery", "carrier", "walking", "standing",
+            "approaching", "leaving", "human", "resident", "guest"
+        ]
         person_detected = any(
             word in description_text.lower()
-            for word in ["person", "people", "someone", "man", "woman", "child"]
+            for word in person_keywords
         )
 
         return {
@@ -1275,7 +1285,7 @@ class VideoAnalyzer:
         model: str = None, api_key: str = None
     ) -> str:
         """Analyze using Google Gemini - VIDEO ONLY."""
-        # VIDEO ONLY - This integration focuses on video analysis, not images
+        # VIDEO ONLY - This integration focuses on video analysis
         if not video_bytes:
             return (
                 "No video stream available for this camera. "
@@ -1293,7 +1303,7 @@ class VideoAnalyzer:
 
             parts = [{"text": prompt}]
 
-            # VIDEO ONLY - no image fallback
+            # VIDEO ONLY - no image analysis
             video_b64 = base64.b64encode(video_bytes).decode()
             parts.insert(0, {
                 "inline_data": {
@@ -1368,8 +1378,8 @@ class VideoAnalyzer:
         self, video_bytes: bytes | None, frame_bytes: bytes | None, prompt: str,
         model: str = None, api_key: str = None
     ) -> str:
-        """Analyze using OpenRouter with VIDEO ONLY support."""
-        # VIDEO ONLY - This integration focuses on video analysis, not images
+        """Analyze using OpenRouter - VIDEO ONLY."""
+        # VIDEO ONLY - This integration focuses on video analysis
         if not video_bytes:
             return (
                 "No video stream available for this camera. "
@@ -1400,7 +1410,7 @@ class VideoAnalyzer:
 
             content = []
 
-            # VIDEO ONLY - no image fallback
+            # VIDEO ONLY - no image analysis
             video_b64 = base64.b64encode(video_bytes).decode()
             content.append({
                 "type": "video_url",
@@ -1459,7 +1469,7 @@ class VideoAnalyzer:
             return f"Analysis error: {str(e)}"
 
     async def _analyze_local(self, video_bytes: bytes | None, frame_bytes: bytes | None, prompt: str) -> str:
-        """Analyze using local vLLM endpoint."""
+        """Analyze using local vLLM endpoint - VIDEO preferred, image fallback."""
         if not video_bytes and not frame_bytes:
             return "No video or image available for analysis"
 
@@ -1468,6 +1478,7 @@ class VideoAnalyzer:
 
             content = []
 
+            # VIDEO ONLY - prefer video, fall back to image for local models that don't support video
             if video_bytes:
                 video_b64 = base64.b64encode(video_bytes).decode()
                 content.append({
@@ -1475,6 +1486,7 @@ class VideoAnalyzer:
                     "video_url": {"url": f"data:video/mp4;base64,{video_b64}"}
                 })
             elif frame_bytes:
+                # Image fallback for local models that don't support video
                 image_b64 = base64.b64encode(frame_bytes).decode()
                 content.append({
                     "type": "image_url",

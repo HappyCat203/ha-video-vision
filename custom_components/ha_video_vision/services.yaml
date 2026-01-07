@@ -42,13 +42,16 @@ analyze_camera:
       default: false
       selector:
         boolean:
-    instant_capture:
-      name: Instant Capture
-      description: Capture snapshot IMMEDIATELY when triggered, before recording video. Use for fast-moving subjects (delivery people, runners) who may leave before video recording completes. The snapshot shows WHO triggered the motion, while video provides AI context.
+    frame_position:
+      name: Notification Frame Position
+      description: Which frame from the video to use for the notification image (0-100%). 0% = first frame (start), 50% = middle frame, 100% = last frame (end). Adjust based on camera behavior - lower values if subjects leave quickly, higher values if there's camera lag.
       required: false
-      default: false
       selector:
-        boolean:
+        number:
+          min: 0
+          max: 100
+          step: 10
+          unit_of_measurement: "%"
 
 record_clip:
   name: Record Clip
