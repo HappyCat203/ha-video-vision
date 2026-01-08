@@ -241,26 +241,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             camera, duration, user_query, frame_position, facial_recognition_frame_position
         )
 
-        # Run facial recognition if requested and analysis was successful
-        # Use face_rec_snapshot_path if available (separate frame position for better face capture)
+        # Run facial recognition IN PARALLEL - don't block on AI first!
         face_rec_path = result.get("face_rec_snapshot_path") or result.get("snapshot_path")
         if do_facial_recognition and result.get("success") and face_rec_path:
-            _LOGGER.warning("=== FACIAL RECOGNITION REQUESTED (via analyze_camera) ===")
-            server_url = config.get(
-                CONF_FACIAL_RECOGNITION_URL, DEFAULT_FACIAL_RECOGNITION_URL
-            )
-            min_confidence = config.get(
-                CONF_FACIAL_RECOGNITION_CONFIDENCE, DEFAULT_FACIAL_RECOGNITION_CONFIDENCE
-            )
-            _LOGGER.warning("Using server_url: %s, min_confidence: %s, frame: %s",
-                          server_url, min_confidence, face_rec_path)
-
-            face_result = await analyzer.identify_faces(
-                face_rec_path, server_url, min_confidence
-            )
-            # Add face results to the response
+            server_url = config.get(CONF_FACIAL_RECOGNITION_URL, DEFAULT_FACIAL_RECOGNITION_URL)
+            min_confidence = config.get(CONF_FACIAL_RECOGNITION_CONFIDENCE, DEFAULT_FACIAL_RECOGNITION_CONFIDENCE)
+            face_result = await analyzer.identify_faces(face_rec_path, server_url, min_confidence)
             result["face_recognition"] = face_result
-            _LOGGER.warning("Face recognition result: %s", face_result)
 
         # Save to timeline if remember is enabled
         # IMPORTANT: Wrap in try/except to ensure Timeline errors don't break notifications
@@ -293,22 +280,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return await analyzer.record_clip(camera, duration)
 
     async def handle_identify_faces(call: ServiceCall) -> dict[str, Any]:
-        """Handle identify_faces service call for facial recognition add-on."""
-        _LOGGER.warning("=== IDENTIFY_FACES SERVICE CALLED ===")
-        _LOGGER.warning("Service call data: %s", call.data)
-
+        """Handle identify_faces service call."""
         image_path = call.data["image_path"]
-        # Use configured URL if not provided in service call
-        server_url = call.data.get("server_url") or config.get(
-            CONF_FACIAL_RECOGNITION_URL, DEFAULT_FACIAL_RECOGNITION_URL
-        )
-        min_confidence = call.data.get("min_confidence") or config.get(
-            CONF_FACIAL_RECOGNITION_CONFIDENCE, DEFAULT_FACIAL_RECOGNITION_CONFIDENCE
-        )
-
-        _LOGGER.warning("Config facial rec URL: %s", config.get(CONF_FACIAL_RECOGNITION_URL))
-        _LOGGER.warning("Using server_url: %s, min_confidence: %s", server_url, min_confidence)
-
+        server_url = call.data.get("server_url") or config.get(CONF_FACIAL_RECOGNITION_URL, DEFAULT_FACIAL_RECOGNITION_URL)
+        min_confidence = call.data.get("min_confidence") or config.get(CONF_FACIAL_RECOGNITION_CONFIDENCE, DEFAULT_FACIAL_RECOGNITION_CONFIDENCE)
         return await analyzer.identify_faces(image_path, server_url, min_confidence)
 
     # Register services with response support
@@ -898,31 +873,17 @@ class VideoAnalyzer:
         """Build ffmpeg command based on stream type (RTSP vs HLS/HTTP).
 
         Uses hardware acceleration if available (NVENC, QuickSync, VA-API, VideoToolbox).
-        Optimized for minimal latency based on Frigate project's proven configurations.
         """
         # Base command
         cmd = ["ffmpeg", "-y"]
 
         # Add protocol-specific options BEFORE input (important for RTSP)
         if stream_url.startswith("rtsp://"):
-            # RTSP stream - aggressive low-latency settings
-            # Based on Frigate's optimizations: https://github.com/blakeblackshear/frigate/issues/5459
-            # Key insight: analyzeduration=1 works, analyzeduration=0 can fail
+            # RTSP stream - simple, proven flags (don't over-engineer!)
             cmd.extend([
                 "-rtsp_transport", "tcp",
-                # Generate timestamps from system clock - improves seekability
-                # See: https://medium.com/@tom.humph/saving-rtsp-camera-streams-with-ffmpeg-baab7e80d767
-                "-use_wallclock_as_timestamps", "1",
-                # Minimal analysis - 1 microsecond (not 0, which can fail)
-                "-analyzeduration", "1",
-                # Minimal probe size - 32 bytes is too aggressive, use 32KB
-                "-probesize", "32000",
-                # No buffering, generate PTS, discard corrupt frames
-                "-fflags", "+nobuffer+genpts+discardcorrupt",
-                # Low delay decoding
+                "-fflags", "+nobuffer",
                 "-flags", "low_delay",
-                # Clean timestamp handling
-                "-avoid_negative_ts", "make_zero",
             ])
         # For HLS/HTTP streams, no special options needed
 
@@ -1177,71 +1138,47 @@ class VideoAnalyzer:
                 async with aiofiles.open(video_path, 'rb') as f:
                     video_bytes = await f.read()
 
-                # Extract frame at user-configured position for notification
-                # This allows users to tune which frame best captures their camera's subjects
-                # Use low frame_position (0-20%) to capture subjects earlier (before they leave)
-                # NOTE: Due to RTSP keyframe delay, recording may start 1-2 seconds after trigger
+                # PARALLEL frame extraction for SPEED
                 frame_time = duration * (frame_position / 100)
-                _LOGGER.debug(
-                    "Extracting notification frame at %d%% (%.2fs into %ds video)",
-                    frame_position, frame_time, duration
-                )
 
-                # Use fast seek (-ss before -i) for local file - accurate enough for notifications
+                # Build notification frame command
                 frame_cmd = [
-                    "ffmpeg", "-y",
-                    "-ss", str(frame_time),  # Seek BEFORE input for speed
-                    "-i", video_path,
-                    "-frames:v", "1",
-                    "-q:v", "2",  # High quality JPEG
-                    "-f", "mjpeg",  # Explicit format for speed
-                    frame_path
+                    "ffmpeg", "-y", "-ss", str(frame_time), "-i", video_path,
+                    "-frames:v", "1", "-q:v", "2", "-f", "mjpeg", frame_path
                 ]
 
+                # Start notification frame extraction
                 frame_proc = await asyncio.create_subprocess_exec(
-                    *frame_cmd,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL
+                    *frame_cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
                 )
-                await asyncio.wait_for(frame_proc.wait(), timeout=10)
 
-                if os.path.exists(frame_path) and os.path.getsize(frame_path) > 0:
-                    async with aiofiles.open(frame_path, 'rb') as f:
-                        frame_bytes = await f.read()
-
-                # Extract separate frame for facial recognition if requested and different position
+                # Start face rec frame extraction IN PARALLEL if different position
+                face_rec_proc = None
                 if (facial_recognition_frame_position is not None and
                     facial_recognition_frame_position != frame_position):
                     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as frf:
                         face_rec_frame_path = frf.name
-
                     face_rec_frame_time = duration * (facial_recognition_frame_position / 100)
-                    _LOGGER.debug(
-                        "Extracting facial recognition frame at %d%% (%.2fs into %ds video)",
-                        facial_recognition_frame_position, face_rec_frame_time, duration
-                    )
-
-                    # Use fast seek for speed
                     face_rec_cmd = [
-                        "ffmpeg", "-y",
-                        "-ss", str(face_rec_frame_time),  # Fast seek
-                        "-i", video_path,
-                        "-frames:v", "1",
-                        "-q:v", "2",  # High quality for face detection
-                        "-f", "mjpeg",
-                        face_rec_frame_path
+                        "ffmpeg", "-y", "-ss", str(face_rec_frame_time), "-i", video_path,
+                        "-frames:v", "1", "-q:v", "2", "-f", "mjpeg", face_rec_frame_path
                     ]
-
                     face_rec_proc = await asyncio.create_subprocess_exec(
-                        *face_rec_cmd,
-                        stdout=asyncio.subprocess.DEVNULL,
-                        stderr=asyncio.subprocess.DEVNULL
+                        *face_rec_cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
                     )
+
+                # Wait for BOTH extractions in parallel
+                await asyncio.wait_for(frame_proc.wait(), timeout=10)
+                if face_rec_proc:
                     await asyncio.wait_for(face_rec_proc.wait(), timeout=10)
 
-                    if os.path.exists(face_rec_frame_path) and os.path.getsize(face_rec_frame_path) > 0:
-                        async with aiofiles.open(face_rec_frame_path, 'rb') as f:
-                            face_rec_frame_bytes = await f.read()
+                # Read frames
+                if os.path.exists(frame_path) and os.path.getsize(frame_path) > 0:
+                    async with aiofiles.open(frame_path, 'rb') as f:
+                        frame_bytes = await f.read()
+                if face_rec_frame_path and os.path.exists(face_rec_frame_path) and os.path.getsize(face_rec_frame_path) > 0:
+                    async with aiofiles.open(face_rec_frame_path, 'rb') as f:
+                        face_rec_frame_bytes = await f.read()
 
             return video_bytes, frame_bytes, face_rec_frame_bytes
 
@@ -1289,12 +1226,7 @@ class VideoAnalyzer:
         """
         duration = duration or self.video_duration
 
-        _LOGGER.warning(
-            "Camera analysis requested - Input: '%s', Provider: %s, Model: %s, Frame: %s%%, FR Frame: %s%%",
-            camera_input, self.provider, self.vllm_model,
-            frame_position if frame_position is not None else self.notification_frame_position,
-            facial_recognition_frame_position if facial_recognition_frame_position is not None else "same"
-        )
+        _LOGGER.debug("Analyzing %s with %s", camera_input, self.provider)
 
         entity_id = self._find_camera_entity(camera_input)
         if not entity_id:
@@ -1344,10 +1276,7 @@ class VideoAnalyzer:
         # Send to AI provider (snapshots save in background)
         description, provider_used = await self._analyze_with_provider(video_bytes, frame_bytes, prompt)
 
-        _LOGGER.warning(
-            "Analysis complete for %s (%s) - Provider: %s, Response length: %d chars",
-            friendly_name, entity_id, provider_used, len(description) if description else 0
-        )
+        _LOGGER.debug("Analysis complete for %s", friendly_name)
 
         # Wait for snapshot saves to complete (should already be done by now)
         snapshot_path = None
@@ -1397,12 +1326,7 @@ class VideoAnalyzer:
         # Get provider settings
         effective_provider, effective_model, effective_api_key = self._get_effective_provider()
 
-        media_type = "video" if video_bytes else ("image" if frame_bytes else "none")
-        _LOGGER.warning(
-            "Sending %s to AI - Provider: %s, Model: %s, Base URL: %s",
-            media_type, effective_provider, effective_model,
-            self.base_url if effective_provider == PROVIDER_LOCAL else "default"
-        )
+        _LOGGER.debug("Sending to AI: %s", effective_provider)
 
         if effective_provider == PROVIDER_GOOGLE:
             result = await self._analyze_google(video_bytes, frame_bytes, prompt, effective_model, effective_api_key)
@@ -1677,20 +1601,8 @@ class VideoAnalyzer:
     async def identify_faces(
         self, image_path: str, server_url: str, min_confidence: int = 50
     ) -> dict[str, Any]:
-        """Identify faces using the facial recognition add-on.
-
-        Args:
-            image_path: Path to image file (e.g., from analyze_camera snapshot)
-            server_url: URL of facial recognition server (e.g., http://homeassistant.local:8100)
-            min_confidence: Minimum confidence % to include in results
-
-        Returns:
-            Dict with faces_detected, identified_people, and summary
-        """
-        _LOGGER.info("=== FACIAL RECOGNITION DEBUG ===")
-        _LOGGER.info("Image path: %s", image_path)
-        _LOGGER.info("Server URL: %s", server_url)
-        _LOGGER.info("Min confidence: %s", min_confidence)
+        """Identify faces using the facial recognition add-on."""
+        _LOGGER.debug("Face rec: %s", image_path)
 
         try:
             # Read image file
@@ -1704,33 +1616,22 @@ class VideoAnalyzer:
                     "summary": "",
                 }
 
-            _LOGGER.info("Image file exists, reading...")
             async with aiofiles.open(image_path, 'rb') as f:
                 image_bytes = await f.read()
-            _LOGGER.info("Image size: %d bytes", len(image_bytes))
 
             image_b64 = base64.b64encode(image_bytes).decode()
             url = f"{server_url.rstrip('/')}/identify"
-            _LOGGER.info("Calling facial recognition API: %s", url)
 
-            async with asyncio.timeout(30):
+            async with asyncio.timeout(10):  # Reduced timeout for speed
                 async with self._session.post(url, json={"image_base64": image_b64}) as response:
-                    _LOGGER.info("API response status: %d", response.status)
                     if response.status == 200:
                         result = await response.json()
-                        _LOGGER.info("RAW API RESPONSE: %s", result)
-
-                        # Filter by confidence threshold
                         all_people = result.get("people", [])
-                        _LOGGER.info("All people from API: %s", all_people)
-
                         identified_people = [
                             p for p in all_people
                             if p.get("name") != "Unknown" and p.get("confidence", 0) >= min_confidence
                         ]
-                        _LOGGER.info("After filtering (min_confidence=%d): %s", min_confidence, identified_people)
-
-                        final_result = {
+                        return {
                             "success": True,
                             "faces_detected": result.get("faces_detected", 0),
                             "identified_people": identified_people,
@@ -1739,8 +1640,6 @@ class VideoAnalyzer:
                                 for p in identified_people
                             ]) if identified_people else "No known faces",
                         }
-                        _LOGGER.info("FINAL RESULT: %s", final_result)
-                        return final_result
                     else:
                         error = await response.text()
                         _LOGGER.warning("Facial recognition error (%d): %s", response.status, error[:200])
@@ -1753,20 +1652,8 @@ class VideoAnalyzer:
                         }
 
         except asyncio.TimeoutError:
-            _LOGGER.error("Facial recognition TIMEOUT after 30 seconds")
-            return {
-                "success": False,
-                "error": "Request timed out",
-                "faces_detected": 0,
-                "identified_people": [],
-                "summary": "",
-            }
+            _LOGGER.warning("Face rec timeout")
+            return {"success": False, "error": "Timeout", "faces_detected": 0, "identified_people": [], "summary": ""}
         except Exception as e:
-            _LOGGER.error("Facial recognition EXCEPTION: %s", e, exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "faces_detected": 0,
-                "identified_people": [],
-                "summary": "",
-            }
+            _LOGGER.error("Face rec error: %s", e)
+            return {"success": False, "error": str(e), "faces_detected": 0, "identified_people": [], "summary": ""}
