@@ -898,17 +898,31 @@ class VideoAnalyzer:
         """Build ffmpeg command based on stream type (RTSP vs HLS/HTTP).
 
         Uses hardware acceleration if available (NVENC, QuickSync, VA-API, VideoToolbox).
+        Optimized for minimal latency based on Frigate project's proven configurations.
         """
         # Base command
         cmd = ["ffmpeg", "-y"]
 
         # Add protocol-specific options BEFORE input (important for RTSP)
         if stream_url.startswith("rtsp://"):
-            # RTSP stream - use TCP transport and reduce latency
+            # RTSP stream - aggressive low-latency settings
+            # Based on Frigate's optimizations: https://github.com/blakeblackshear/frigate/issues/5459
+            # Key insight: analyzeduration=1 works, analyzeduration=0 can fail
             cmd.extend([
                 "-rtsp_transport", "tcp",
-                "-fflags", "+nobuffer",
+                # Generate timestamps from system clock - improves seekability
+                # See: https://medium.com/@tom.humph/saving-rtsp-camera-streams-with-ffmpeg-baab7e80d767
+                "-use_wallclock_as_timestamps", "1",
+                # Minimal analysis - 1 microsecond (not 0, which can fail)
+                "-analyzeduration", "1",
+                # Minimal probe size - 32 bytes is too aggressive, use 32KB
+                "-probesize", "32000",
+                # No buffering, generate PTS, discard corrupt frames
+                "-fflags", "+nobuffer+genpts+discardcorrupt",
+                # Low delay decoding
                 "-flags", "low_delay",
+                # Clean timestamp handling
+                "-avoid_negative_ts", "make_zero",
             ])
         # For HLS/HTTP streams, no special options needed
 
@@ -1071,8 +1085,17 @@ class VideoAnalyzer:
 
         Returns: (video_bytes, notification_frame_bytes, face_rec_frame_bytes)
                  face_rec_frame_bytes is None if same position as notification or not requested.
+
+        Note: RTSP streams have inherent latency due to keyframe (GOP) requirements.
+        Recording cannot start until a keyframe is received, which may take 1-2 seconds.
+        Use low frame_position values (0-20%) to capture earliest possible frames.
         """
+        import time
+        start_time = time.time()
+
         stream_url = await self._get_stream_url(entity_id)
+        stream_url_time = time.time() - start_time
+        _LOGGER.debug("Got stream URL in %.2fs", stream_url_time)
 
         video_bytes = None
         frame_bytes = None
@@ -1119,6 +1142,9 @@ class VideoAnalyzer:
             video_cmd = await self._build_ffmpeg_cmd(stream_url, duration, video_path, target_fps)
             _LOGGER.debug("FFmpeg command: %s", " ".join(video_cmd))
 
+            # Track timing for debugging
+            ffmpeg_start = time.time()
+
             video_proc = await asyncio.create_subprocess_exec(
                 *video_cmd,
                 stdout=asyncio.subprocess.DEVNULL,
@@ -1128,6 +1154,12 @@ class VideoAnalyzer:
             # Wait for video recording to complete
             try:
                 _, stderr = await asyncio.wait_for(video_proc.communicate(), timeout=duration + 15)
+                ffmpeg_elapsed = time.time() - ffmpeg_start
+                total_elapsed = time.time() - start_time
+                _LOGGER.info(
+                    "Recording complete for %s - FFmpeg: %.1fs (expected: %ds), Total: %.1fs",
+                    entity_id, ffmpeg_elapsed, duration, total_elapsed
+                )
             except asyncio.TimeoutError:
                 video_proc.kill()
                 _LOGGER.error("FFmpeg timed out after %d seconds for %s", duration + 15, entity_id)
@@ -1147,19 +1179,22 @@ class VideoAnalyzer:
 
                 # Extract frame at user-configured position for notification
                 # This allows users to tune which frame best captures their camera's subjects
-                # (e.g., 0% for cameras with lag, 50% for middle, 100% for end)
+                # Use low frame_position (0-20%) to capture subjects earlier (before they leave)
+                # NOTE: Due to RTSP keyframe delay, recording may start 1-2 seconds after trigger
                 frame_time = duration * (frame_position / 100)
                 _LOGGER.debug(
                     "Extracting notification frame at %d%% (%.2fs into %ds video)",
                     frame_position, frame_time, duration
                 )
 
+                # Use fast seek (-ss before -i) for local file - accurate enough for notifications
                 frame_cmd = [
                     "ffmpeg", "-y",
-                    "-ss", str(frame_time),
+                    "-ss", str(frame_time),  # Seek BEFORE input for speed
                     "-i", video_path,
                     "-frames:v", "1",
-                    "-q:v", "2",
+                    "-q:v", "2",  # High quality JPEG
+                    "-f", "mjpeg",  # Explicit format for speed
                     frame_path
                 ]
 
@@ -1186,12 +1221,14 @@ class VideoAnalyzer:
                         facial_recognition_frame_position, face_rec_frame_time, duration
                     )
 
+                    # Use fast seek for speed
                     face_rec_cmd = [
                         "ffmpeg", "-y",
-                        "-ss", str(face_rec_frame_time),
+                        "-ss", str(face_rec_frame_time),  # Fast seek
                         "-i", video_path,
                         "-frames:v", "1",
-                        "-q:v", "2",
+                        "-q:v", "2",  # High quality for face detection
+                        "-f", "mjpeg",
                         face_rec_frame_path
                     ]
 
