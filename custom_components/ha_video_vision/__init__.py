@@ -1023,14 +1023,24 @@ class VideoAnalyzer:
         # Prepare prompt - voice checks get a natural, conversational wrapper
         is_voice_check = bool(user_query)
         if user_query:
-            # Voice check: wrap with instructions for natural, personal response
+            # Voice check: wrap with instructions for rich, descriptive personal response
             prompt = (
                 f"The user asked to check their '{friendly_name}' camera. "
-                f"Describe what you see in 2-3 natural sentences as their personal home security assistant. "
-                f"Start with something like 'Your {friendly_name} shows...' or 'The {friendly_name} shows...'. "
-                f"Be conversational and helpful. Focus on what matters: people, vehicles, activity, or if it's all clear. "
-                f"Do NOT mention: frames, timestamps, lens distortion, image quality, camera angles, or technical details. "
-                f"Just describe the scene naturally like you're telling a friend what you see."
+                f"Give a detailed, natural description of the scene in 4-6 sentences. "
+                f"Start with 'Your {friendly_name} shows...' or 'The {friendly_name} shows...'. "
+                f"\n\nDescribe:\n"
+                f"- The overall scene and setting (yard, driveway, porch, etc.)\n"
+                f"- Any people present: how many, what they're doing, what they're wearing, where they are\n"
+                f"- Any vehicles: type, color, parked or moving, location\n"
+                f"- Notable activity or movement\n"
+                f"- Packages, deliveries, or objects of interest\n"
+                f"- Pets or animals if visible\n"
+                f"- General conditions (lighting, weather if visible)\n"
+                f"\nIf the scene is quiet with no activity, describe what IS visible - the lawn, landscaping, "
+                f"vehicles in the driveway, the state of doors/gates, etc. Paint a picture of the scene.\n"
+                f"\nSpeak naturally like a helpful home assistant giving a security update. "
+                f"Do NOT mention: frames, timestamps, video duration, resolution, lens distortion, camera angles, "
+                f"or any technical/camera terminology. Just describe what you see as if looking out a window."
             )
         else:
             # Motion alert: use technical prompt for detection accuracy
@@ -1162,12 +1172,13 @@ class VideoAnalyzer:
             # System instruction - conversational for voice checks, technical for motion alerts
             if is_voice_check:
                 system_instruction = (
-                    "You are a friendly home security assistant. Describe what you see naturally and conversationally, "
-                    "like you're telling the homeowner what's happening at their property. "
-                    "Focus on people, vehicles, packages, pets, or notable activity. "
-                    "If nothing is happening, reassure them that everything looks normal. "
-                    "NEVER mention technical details like frames, timestamps, resolution, lens distortion, or camera angles. "
-                    "NEVER identify specific people by name - just describe them naturally (a person, someone, a man/woman, etc.)."
+                    "You are a helpful home security assistant providing detailed camera updates to the homeowner. "
+                    "Describe scenes richly and naturally, like you're painting a picture of what's happening at their property. "
+                    "Include details about: people (appearance, clothing, actions, location), vehicles (type, color, status), "
+                    "the environment (lawn, driveway, porch condition), packages or deliveries, pets, and general activity. "
+                    "Even when nothing notable is happening, describe what you CAN see - the quiet yard, parked cars, closed gates, etc. "
+                    "Speak warmly and personally. NEVER use technical camera terms (frames, timestamps, resolution, lens, angles). "
+                    "NEVER identify people by name - describe them naturally (a man in a blue jacket, someone walking, etc.)."
                 )
             else:
                 system_instruction = (
@@ -1281,12 +1292,13 @@ class VideoAnalyzer:
             # System message - conversational for voice checks, technical for motion alerts
             if is_voice_check:
                 system_message = (
-                    "You are a friendly home security assistant. Describe what you see naturally and conversationally, "
-                    "like you're telling the homeowner what's happening at their property. "
-                    "Focus on people, vehicles, packages, pets, or notable activity. "
-                    "If nothing is happening, reassure them that everything looks normal. "
-                    "NEVER mention technical details like frames, timestamps, resolution, lens distortion, or camera angles. "
-                    "NEVER identify specific people by name - just describe them naturally (a person, someone, a man/woman, etc.)."
+                    "You are a helpful home security assistant providing detailed camera updates to the homeowner. "
+                    "Describe scenes richly and naturally, like you're painting a picture of what's happening at their property. "
+                    "Include details about: people (appearance, clothing, actions, location), vehicles (type, color, status), "
+                    "the environment (lawn, driveway, porch condition), packages or deliveries, pets, and general activity. "
+                    "Even when nothing notable is happening, describe what you CAN see - the quiet yard, parked cars, closed gates, etc. "
+                    "Speak warmly and personally. NEVER use technical camera terms (frames, timestamps, resolution, lens, angles). "
+                    "NEVER identify people by name - describe them naturally (a man in a blue jacket, someone walking, etc.)."
                 )
             else:
                 system_message = (
@@ -1365,12 +1377,13 @@ class VideoAnalyzer:
             # System message - conversational for voice checks, technical for motion alerts
             if is_voice_check:
                 system_message = (
-                    "You are a friendly home security assistant. Describe what you see naturally and conversationally, "
-                    "like you're telling the homeowner what's happening at their property. "
-                    "Focus on people, vehicles, packages, pets, or notable activity. "
-                    "If nothing is happening, reassure them that everything looks normal. "
-                    "NEVER mention technical details like frames, timestamps, resolution, lens distortion, or camera angles. "
-                    "NEVER identify specific people by name - just describe them naturally (a person, someone, a man/woman, etc.)."
+                    "You are a helpful home security assistant providing detailed camera updates to the homeowner. "
+                    "Describe scenes richly and naturally, like you're painting a picture of what's happening at their property. "
+                    "Include details about: people (appearance, clothing, actions, location), vehicles (type, color, status), "
+                    "the environment (lawn, driveway, porch condition), packages or deliveries, pets, and general activity. "
+                    "Even when nothing notable is happening, describe what you CAN see - the quiet yard, parked cars, closed gates, etc. "
+                    "Speak warmly and personally. NEVER use technical camera terms (frames, timestamps, resolution, lens, angles). "
+                    "NEVER identify people by name - describe them naturally (a man in a blue jacket, someone walking, etc.)."
                 )
             else:
                 system_message = (
