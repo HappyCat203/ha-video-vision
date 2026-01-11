@@ -1026,8 +1026,9 @@ class VideoAnalyzer:
         else:
             prompt = (
                 "CAREFULLY scan the ENTIRE frame including all edges, corners, and background areas. "
-                "Report ANY people visible - even if small, distant, partially obscured, or at the edges. "
+                "Report ANY people, animals, or pets visible - even if small, distant, partially obscured, or at the edges. "
                 "Also report moving vehicles. For people, describe their location and actions. "
+                "For animals, identify the type (dog, cat, etc.) and what they are doing. "
                 "Be concise (2-3 sentences). Say 'no activity' only if absolutely nothing is present."
             )
 
@@ -1076,12 +1077,25 @@ class VideoAnalyzer:
             for word in person_keywords
         )
 
+        # Check for animal-related words in AI description
+        animal_keywords = [
+            "dog", "cat", "pet", "animal", "puppy", "kitten",
+            "canine", "feline", "bird", "squirrel", "rabbit",
+            "deer", "raccoon", "fox", "coyote", "wildlife",
+            "creature", "critter", "hound", "pup", "kitty"
+        ]
+        animal_detected = any(
+            word in description_text.lower()
+            for word in animal_keywords
+        )
+
         return {
             "success": True,
             "camera": entity_id,
             "friendly_name": friendly_name,
             "description": description,
             "person_detected": person_detected,
+            "animal_detected": animal_detected,
             "snapshot_path": snapshot_path,
             "snapshot_url": f"/media/local/ha_video_vision/{safe_name}_latest.jpg" if snapshot_path else None,
             # Facial recognition uses separate frame if available, otherwise falls back to notification frame
